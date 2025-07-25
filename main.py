@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+import sys
 from contextlib import asynccontextmanager
 
 from core.config import settings
@@ -8,6 +9,7 @@ from database.factory import initialize_database, close_database
 from routes.basic import router as basic_router
 from routes.users import router as users_router
 from routes.messages import router as messages_router
+from startup import startup_check_sync
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -39,9 +41,18 @@ app.include_router(users_router)
 app.include_router(messages_router)
 
 if __name__ == "__main__":
-    print("Starting Bot Backend Server...")
-    print("=" * 50)
-    # start up functions, logging, startup.py
+    print("Bot Backend Server - Starting Pre-Flight Checks...")
+    print("=" * 60)
+    
+    # Run comprehensive startup health checks
+    if not startup_check_sync():
+        print("\nStartup failed due to health check errors!")
+        print("Please fix the above issues and try again.")
+        sys.exit(1)
+    
+    print("\nAll systems ready! Starting FastAPI server...")
+    print("=" * 60)
+    
     uvicorn.run(
         "main:app",
         host=settings.HOST,
