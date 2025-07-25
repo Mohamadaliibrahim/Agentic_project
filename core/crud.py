@@ -9,6 +9,7 @@ import uuid
 
 from database.factory import get_db
 from data_validation import UserResponse, ChatMessageCreate, ChatMessageResponse
+from core.mistral_service import mistral_service
 
 # User CRUD Operations
 async def create_user() -> UserResponse:
@@ -65,15 +66,21 @@ async def delete_user(user_id: str) -> bool:
 
 # Chat Message CRUD Operations
 async def create_chat_message(message_data: ChatMessageCreate) -> ChatMessageResponse:
-    """Create a new chat message"""
+    """Create a new chat message with AI response from Mistral"""
     db = get_db()
+    
+    # Generate AI response using Mistral AI
+    ai_response = await mistral_service.generate_response(
+        user_message=message_data.user_msg,
+        user_id=message_data.user_id
+    )
     
     chat_data = {
         "id": str(uuid.uuid4()),
         "user_id": message_data.user_id,
         "date": datetime.utcnow(),
         "user_msg": message_data.user_msg,
-        "assistant_msg": f"your message is {message_data.user_msg}"  # Simple response for now
+        "assistant_msg": ai_response  # Now using actual AI response from Mistral
     }
     
     await db.create_message(chat_data)

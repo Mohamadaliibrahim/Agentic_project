@@ -41,6 +41,7 @@ app.include_router(messages_router)
 if __name__ == "__main__":
     print("Starting Bot Backend Server...")
     print("=" * 50)
+    # start up functions, logging, startup.py
     uvicorn.run(
         "main:app",
         host=settings.HOST,

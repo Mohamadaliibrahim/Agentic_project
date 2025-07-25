@@ -13,7 +13,7 @@ class Settings:
     
     # Server Configuration
     HOST: str = "127.0.0.1"
-    PORT: int = 8010
+    PORT: int = 8011
     RELOAD: bool = True
     LOG_LEVEL: str = "info"
     
@@ -32,6 +32,11 @@ class Settings:
     CORS_CREDENTIALS: bool = True
     CORS_METHODS: list = ["*"]
     CORS_HEADERS: list = ["*"]
+    
+    # Mistral AI Configuration
+    MISTRAL_API_ENDPOINT: str = os.getenv("MISTRAL_API_ENDPOINT", "https://api.mistral.ai/v1/chat/completions")
+    MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY", "")
+    MISTRAL_MODEL: str = os.getenv("MISTRAL_MODEL", "mistral-small-2503")
 
 # Global settings instance
 settings = Settings()
