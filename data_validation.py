@@ -1,3 +1,8 @@
+"""
+Data Validation Models
+This module contains all Pydantic models for request/response validation
+"""
+
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime

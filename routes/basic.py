@@ -1,3 +1,8 @@
+"""
+Basic Routes
+Root and health check endpoints
+"""
+
 from fastapi import APIRouter
 
 router = APIRouter()

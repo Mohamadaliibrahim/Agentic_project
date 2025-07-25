@@ -7,8 +7,8 @@ from datetime import datetime
 from typing import List, Optional
 import uuid
 
-from database_factory import get_db
-from models import UserResponse, ChatMessageCreate, ChatMessageResponse
+from database.factory import get_db
+from data_validation import UserResponse, ChatMessageCreate, ChatMessageResponse
 
 # User CRUD Operations
 async def create_user() -> UserResponse:

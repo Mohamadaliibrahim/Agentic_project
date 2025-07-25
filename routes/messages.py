@@ -1,7 +1,12 @@
+"""
+Message Routes
+Chat message management endpoints
+"""
+
 from fastapi import APIRouter, HTTPException, status
 from typing import List
-import crud
-from models import ChatMessageResponse, ChatMessageUpdate, ChatRequest, ChatResponse
+from core import crud
+from data_validation import ChatMessageResponse, ChatMessageUpdate, ChatRequest, ChatResponse
 from pymongo.errors import PyMongoError, DuplicateKeyError, ServerSelectionTimeoutError
 from bson.errors import InvalidId
 
@@ -54,7 +59,7 @@ async def chat_endpoint(chat_request: ChatRequest) -> ChatResponse:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"User with ID {chat_request.user_id} not found"
             )
-        from models import ChatMessageCreate
+        from data_validation import ChatMessageCreate
         message_data = ChatMessageCreate(
             user_id=chat_request.user_id,
             user_msg=chat_request.message

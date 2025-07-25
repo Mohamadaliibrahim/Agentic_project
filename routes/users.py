@@ -1,7 +1,12 @@
+"""
+User Routes
+User management endpoints
+"""
+
 from fastapi import APIRouter, HTTPException, status
 from typing import List
-import crud
-from models import UserResponse
+from core import crud
+from data_validation import UserResponse
 
 router = APIRouter()
 

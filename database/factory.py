@@ -2,21 +2,18 @@
 Database Factory - Creates appropriate database adapter based on configuration
 """
 
-import os
-from dotenv import load_dotenv
-from database_interface import DatabaseInterface
-
-load_dotenv()
+from core.config import settings
+from database.interface import DatabaseInterface
 
 def get_database_adapter() -> DatabaseInterface:
     """
     Factory function to get the appropriate database adapter
     Change DATABASE_TYPE in .env to switch databases easily
     """
-    database_type = os.getenv("DATABASE_TYPE", "mongodb").lower()
+    database_type = settings.DATABASE_TYPE.lower()
     
     if database_type == "mongodb":
-        from mongodb_adapter import MongoDBAdapter
+        from database.mongodb_adapter import MongoDBAdapter
         return MongoDBAdapter()
     else:
         raise ValueError(f"Unsupported database type: {database_type}")

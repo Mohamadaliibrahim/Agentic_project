@@ -1,14 +1,11 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import List, Optional, Dict, Any
-import os
 import json
 import uuid
 from datetime import datetime
-from dotenv import load_dotenv
 
-from database_interface import DatabaseInterface
-
-load_dotenv()
+from core.config import settings
+from database.interface import DatabaseInterface
 
 class MongoDBAdapter(DatabaseInterface):
     """MongoDB implementation - stores data as flexible JSON in original tables"""
@@ -16,8 +13,8 @@ class MongoDBAdapter(DatabaseInterface):
     def __init__(self):
         self.client: Optional[AsyncIOMotorClient] = None
         self.database = None
-        self.mongodb_url = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
-        self.database_name = os.getenv("DATABASE_NAME", "bot_database")
+        self.mongodb_url = settings.MONGODB_URL
+        self.database_name = settings.DATABASE_NAME
     
     def _to_json_document(self, data: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
         """Convert data to pure JSON document for storage - only essential data"""
