@@ -1,11 +1,5 @@
-"""
-Mistral AI Service
-Handles communication with Mistral AI API for generating bot responses
-"""
-
 import httpx
 import json
-from typing import Optional
 from core.config import settings
 
 class MistralAIService:
@@ -17,16 +11,6 @@ class MistralAIService:
         self.model = settings.MISTRAL_MODEL
         
     async def generate_response(self, user_message: str, user_id: str = None) -> str:
-        """
-        Generate AI response using Mistral AI
-        
-        Args:
-            user_message: The user's input message
-            user_id: Optional user ID for context
-            
-        Returns:
-            Generated AI response string
-        """
         if not self.api_key:
             return "AI service is not configured. Please contact the administrator."
         
@@ -35,7 +19,6 @@ class MistralAIService:
             "Authorization": f"Bearer {self.api_key}"
         }
         
-        # Prepare the message payload for Mistral AI
         payload = {
             "model": self.model,
             "messages": [
@@ -63,7 +46,6 @@ class MistralAIService:
                 if response.status_code == 200:
                     result = response.json()
                     
-                    # Extract the AI response from Mistral's response format
                     if "choices" in result and len(result["choices"]) > 0:
                         ai_response = result["choices"][0]["message"]["content"].strip()
                         return ai_response
@@ -97,11 +79,9 @@ class MistralAIService:
             return False
             
         try:
-            # Simple test message to check API connectivity
             test_response = await self.generate_response("Hello")
             return not test_response.startswith("AI service")
         except:
             return False
 
-# Global service instance
 mistral_service = MistralAIService()

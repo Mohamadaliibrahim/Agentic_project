@@ -44,7 +44,6 @@ if __name__ == "__main__":
     print("Bot Backend Server - Starting Pre-Flight Checks...")
     print("=" * 60)
     
-    # Run comprehensive startup health checks
     if not startup_check_sync():
         print("\nStartup failed due to health check errors!")
         print("Please fix the above issues and try again.")

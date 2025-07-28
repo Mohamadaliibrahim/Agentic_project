@@ -1,39 +1,5 @@
-# Environment variables
 .env
-.env.local
-.env.production
 
-# Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
 myenv/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-logs/
-
-# Database
-*.db
-*.sqlite
-
-# Temporary files
-*.tmp
-*.temp

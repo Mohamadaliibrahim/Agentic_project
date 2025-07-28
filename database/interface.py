@@ -24,7 +24,6 @@ class DatabaseInterface(ABC):
         """Create database indexes for performance"""
         pass
     
-    # User operations
     @abstractmethod
     async def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new user"""

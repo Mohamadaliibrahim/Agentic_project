@@ -1,8 +1,5 @@
 from motor.motor_asyncio import AsyncIOMotorClient
 from typing import List, Optional, Dict, Any
-import json
-import uuid
-from datetime import datetime
 
 from core.config import settings
 from database.interface import DatabaseInterface
@@ -18,13 +15,11 @@ class MongoDBAdapter(DatabaseInterface):
     
     def _to_json_document(self, data: Dict[str, Any], doc_type: str) -> Dict[str, Any]:
         """Convert data to pure JSON document for storage - only essential data"""
-        # Store only the actual data, no wrapper or type fields
         return data.copy()
     
     def _from_json_document(self, doc: Dict[str, Any]) -> Dict[str, Any]:
         """Extract data from JSON document (remove only MongoDB internal fields)"""
         if doc:
-            # Remove only MongoDB's internal _id field
             clean_doc = {k: v for k, v in doc.items() if k != '_id'}
             return clean_doc
         return doc
@@ -44,18 +39,15 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def create_indexes(self) -> None:
         """Create MongoDB indexes for pure JSON storage"""
-        # Users table - only essential indexes
         await self.database.users.create_index("id", unique=True)
         await self.database.users.create_index("created_at")
         
-        # Chat messages table - only essential indexes  
         await self.database.chat_messages.create_index("id", unique=True)
-        await self.database.chat_messages.create_index("user_id")  # For fast user lookups
-        await self.database.chat_messages.create_index("date")  # For sorting
+        await self.database.chat_messages.create_index("user_id")
+        await self.database.chat_messages.create_index("date")
         
         print("Database indexes created for pure JSON storage")
     
-    # User operations - Pure JSON storage in users table
     async def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new user stored as pure JSON in users table"""
         json_doc = self._to_json_document(user_data, "user")
@@ -78,10 +70,8 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def delete_user(self, user_id: str) -> bool:
         """Delete a user and all their messages from original tables"""
-        # First delete all messages for this user from chat_messages table
         await self.database.chat_messages.delete_many({"user_id": user_id})
         
-        # Then delete the user from users table
         result = await self.database.users.delete_one({"id": user_id})
         return result.deleted_count > 0
     
@@ -89,7 +79,6 @@ class MongoDBAdapter(DatabaseInterface):
         """Count messages for a user in chat_messages table"""
         return await self.database.chat_messages.count_documents({"user_id": user_id})
     
-    # Message operations - Pure JSON storage in chat_messages table
     async def create_message(self, message_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new chat message stored as pure JSON in chat_messages table"""
         json_doc = self._to_json_document(message_data, "message")
@@ -112,16 +101,13 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def update_message(self, message_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a message in chat_messages table with pure JSON data"""
-        # Get current document
         doc = await self.database.chat_messages.find_one({"id": message_id})
         if not doc:
             return None
         
-        # Update the document directly (pure JSON)
         current_data = self._from_json_document(doc)
         current_data.update(update_data)
         
-        # Update with pure JSON data
         result = await self.database.chat_messages.update_one(
             {"id": message_id},
             {"$set": current_data}

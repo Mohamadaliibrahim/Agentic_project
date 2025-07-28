@@ -1,8 +1,3 @@
-"""
-Startup Health Checks and Validation
-This module performs comprehensive system checks before starting the FastAPI server
-"""
-
 import asyncio
 import sys
 import os
@@ -14,7 +9,6 @@ from dotenv import load_dotenv
 from core.config import settings
 from core.mistral_service import mistral_service
 
-# Load environment variables
 load_dotenv()
 
 class StartupHealthChecker:
@@ -74,13 +68,10 @@ class StartupHealthChecker:
         print("\nChecking Database Connection...")
         
         try:
-            # Test MongoDB connection
             client = AsyncIOMotorClient(settings.MONGODB_URL, serverSelectionTimeoutMS=5000)
             
-            # Try to ping the server
             await client.admin.command('ping')
             
-            # Check if database exists or can be created
             db = client[settings.DATABASE_NAME]
             collections = await db.list_collection_names()
             
@@ -106,7 +97,6 @@ class StartupHealthChecker:
         print("\nChecking Mistral AI Service...")
         
         try:
-            # Check if API key is configured
             if not settings.MISTRAL_API_KEY:
                 self.log_error("Mistral AI", "API key is not configured")
                 return False
@@ -115,7 +105,6 @@ class StartupHealthChecker:
                 self.log_error("Mistral AI", "API key appears to be invalid (too short)")
                 return False
             
-            # Test API connectivity with a simple request
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {settings.MISTRAL_API_KEY}"
@@ -163,7 +152,6 @@ class StartupHealthChecker:
         print("\nChecking Server Configuration...")
         
         try:
-            # Check if port is available
             import socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(1)
@@ -177,7 +165,6 @@ class StartupHealthChecker:
             else:
                 self.log_success("Server", f"Port {settings.PORT} is available")
             
-            # Check host configuration
             if settings.HOST in ["127.0.0.1", "localhost"]:
                 self.log_success("Server", f"Server will run on {settings.HOST}:{settings.PORT}")
             else:
@@ -187,14 +174,13 @@ class StartupHealthChecker:
             
         except Exception as e:
             self.log_warning("Server", f"Cannot check port availability: {str(e)}")
-            return True  # Don't fail startup for this
+            return True
     
     async def check_file_permissions(self) -> bool:
         """Check if we can write to necessary directories"""
         print("\nChecking File Permissions...")
         
         try:
-            # Check if we can write to the current directory (for logs, etc.)
             test_file = "test_write_permission.tmp"
             with open(test_file, "w") as f:
                 f.write("test")
@@ -260,6 +246,5 @@ def startup_check_sync() -> bool:
     return asyncio.run(run_startup_checks())
 
 if __name__ == "__main__":
-    # Allow running startup checks independently
     success = startup_check_sync()
     sys.exit(0 if success else 1)
