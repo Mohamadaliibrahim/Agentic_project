@@ -65,6 +65,11 @@ class DatabaseInterface(ABC):
         pass
     
     @abstractmethod
+    async def get_messages_by_chat_id(self, chat_id: str) -> List[Dict[str, Any]]:
+        """Get all messages for a specific chat ID (page)"""
+        pass
+    
+    @abstractmethod
     async def update_message(self, message_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a message"""
         pass

@@ -44,6 +44,7 @@ class MongoDBAdapter(DatabaseInterface):
         
         await self.database.chat_messages.create_index("id", unique=True)
         await self.database.chat_messages.create_index("user_id")
+        await self.database.chat_messages.create_index("chat_id")  # Index for page-based conversations
         await self.database.chat_messages.create_index("date")
         
         print("Database indexes created for pure JSON storage")
@@ -96,6 +97,13 @@ class MongoDBAdapter(DatabaseInterface):
         """Get all messages for a user from chat_messages table with pure JSON data"""
         messages = []
         async for doc in self.database.chat_messages.find({"user_id": user_id}).sort("date", 1):
+            messages.append(self._from_json_document(doc))
+        return messages
+    
+    async def get_messages_by_chat_id(self, chat_id: str) -> List[Dict[str, Any]]:
+        """Get all messages for a specific chat ID (page) from chat_messages table"""
+        messages = []
+        async for doc in self.database.chat_messages.find({"chat_id": chat_id}).sort("date", 1):
             messages.append(self._from_json_document(doc))
         return messages
     

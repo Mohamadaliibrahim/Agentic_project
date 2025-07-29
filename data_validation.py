@@ -25,11 +25,13 @@ class ChatMessageCreate(BaseModel):
     """Model for creating a new chat message"""
     user_id: str
     user_msg: str
+    chat_id: Optional[str] = None  # Optional chat ID for page-based conversations
 
 class ChatMessageResponse(BaseModel):
     """Model for chat message response"""
     id: str
     user_id: str
+    chat_id: str  # Chat ID for page-based conversations
     date: datetime
     user_msg: str
     assistant_msg: str
@@ -42,10 +44,12 @@ class ChatRequest(BaseModel):
     """Model for chat request"""
     user_id: str
     message: str
+    chat_id: Optional[str] = None  # Optional chat ID for page-based conversations
 
 class ChatResponse(BaseModel):
     """Model for chat response"""
     user_message: str
     bot_response: str
     message_id: str
+    chat_id: str  # Return the chat ID (created or provided)
     timestamp: datetime

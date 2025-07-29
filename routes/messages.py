@@ -51,7 +51,7 @@ def handle_database_exceptions(e: Exception, operation: str = "operation"):
 
 @router.post("/chat", tags=["Messages"])
 async def chat_endpoint(chat_request: ChatRequest) -> ChatResponse:
-    """ Enhanced chat endpoint - saves conversation to database with auto-generated response """
+    """ Enhanced chat endpoint - saves conversation to database with page-based chat IDs """
     try:
         user = await crud.get_user(chat_request.user_id)
         if not user:
@@ -62,7 +62,8 @@ async def chat_endpoint(chat_request: ChatRequest) -> ChatResponse:
         from data_validation import ChatMessageCreate
         message_data = ChatMessageCreate(
             user_id=chat_request.user_id,
-            user_msg=chat_request.message
+            user_msg=chat_request.message,
+            chat_id=chat_request.chat_id  # Pass the chat_id (or None for new page)
         )
         
         saved_message = await crud.create_chat_message(message_data)
@@ -71,8 +72,21 @@ async def chat_endpoint(chat_request: ChatRequest) -> ChatResponse:
             user_message=chat_request.message,
             bot_response=saved_message.assistant_msg,
             message_id=saved_message.id,
+            chat_id=saved_message.chat_id,  # Return the chat_id (created or provided)
             timestamp=saved_message.date
         )
+    except ValueError as e:
+        # Handle invalid chat_id error
+        if "does not exist" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e)
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid data provided: {str(e)}"
+            )
     except Exception as e:
         handle_database_exceptions(e, "processing your message")
 
@@ -91,6 +105,15 @@ async def get_user_messages(user_id: str):
         return messages
     except Exception as e:
         handle_database_exceptions(e, "retrieving messages")
+
+@router.get("/chat/{chat_id}/messages", response_model=List[ChatMessageResponse], tags=["Messages"])
+async def get_chat_messages(chat_id: str):
+    """ Get all messages for a specific chat ID (page) """
+    try:
+        messages = await crud.get_chat_messages_by_chat_id(chat_id)
+        return messages
+    except Exception as e:
+        handle_database_exceptions(e, "retrieving chat messages")
 
 @router.get("/messages/{message_id}", response_model=ChatMessageResponse, tags=["Messages"])
 async def get_chat_message(message_id: str):

@@ -65,19 +65,40 @@ async def delete_user(user_id: str) -> bool:
     return await db.delete_user(user_id)
 
 # Chat Message CRUD Operations
+async def validate_chat_id_exists(chat_id: str) -> bool:
+    """Check if a chat_id exists in the database"""
+    db = get_db()
+    messages = await db.get_messages_by_chat_id(chat_id)
+    return len(messages) > 0
+
 async def create_chat_message(message_data: ChatMessageCreate) -> ChatMessageResponse:
     """Create a new chat message with AI response from Mistral"""
     db = get_db()
     
-    # Generate AI response using Mistral AI
+    # Generate chat_id if not provided (create new page)
+    chat_id = message_data.chat_id if message_data.chat_id else str(uuid.uuid4())
+    
+    # If chat_id was provided, validate it exists (unless it's a new chat)
+    if message_data.chat_id and not await validate_chat_id_exists(message_data.chat_id):
+        raise ValueError(f"Chat ID '{message_data.chat_id}' does not exist")
+    
+    # Get conversation history for context-aware AI response
+    conversation_history = []
+    if message_data.chat_id:  # If existing chat, get previous messages
+        previous_messages = await db.get_messages_by_chat_id(message_data.chat_id)
+        conversation_history = previous_messages
+    
+    # Generate AI response using Mistral AI with conversation context
     ai_response = await mistral_service.generate_response(
         user_message=message_data.user_msg,
-        user_id=message_data.user_id
+        user_id=message_data.user_id,
+        conversation_history=conversation_history
     )
     
     chat_data = {
         "id": str(uuid.uuid4()),
         "user_id": message_data.user_id,
+        "chat_id": chat_id,  # Add chat_id for page-based conversations
         "date": datetime.utcnow(),
         "user_msg": message_data.user_msg,
         "assistant_msg": ai_response  # Now using actual AI response from Mistral
@@ -88,6 +109,7 @@ async def create_chat_message(message_data: ChatMessageCreate) -> ChatMessageRes
     return ChatMessageResponse(
         id=chat_data["id"],
         user_id=chat_data["user_id"],
+        chat_id=chat_data["chat_id"],  # Return the chat_id
         date=chat_data["date"],
         user_msg=chat_data["user_msg"],
         assistant_msg=chat_data["assistant_msg"]
@@ -101,6 +123,7 @@ async def get_chat_message(message_id: str) -> Optional[ChatMessageResponse]:
         return ChatMessageResponse(
             id=message["id"],
             user_id=message["user_id"],
+            chat_id=message.get("chat_id", ""),  # Handle existing messages without chat_id
             date=message["date"],
             user_msg=message["user_msg"],
             assistant_msg=message["assistant_msg"]
@@ -116,6 +139,23 @@ async def get_user_chat_messages(user_id: str) -> List[ChatMessageResponse]:
         messages.append(ChatMessageResponse(
             id=message["id"],
             user_id=message["user_id"],
+            chat_id=message.get("chat_id", ""),  # Handle existing messages without chat_id
+            date=message["date"],
+            user_msg=message["user_msg"],
+            assistant_msg=message["assistant_msg"]
+        ))
+    return messages
+
+async def get_chat_messages_by_chat_id(chat_id: str) -> List[ChatMessageResponse]:
+    """Get all messages for a specific chat ID (page)"""
+    db = get_db()
+    message_list = await db.get_messages_by_chat_id(chat_id)
+    messages = []
+    for message in message_list:
+        messages.append(ChatMessageResponse(
+            id=message["id"],
+            user_id=message["user_id"],
+            chat_id=message["chat_id"],
             date=message["date"],
             user_msg=message["user_msg"],
             assistant_msg=message["assistant_msg"]

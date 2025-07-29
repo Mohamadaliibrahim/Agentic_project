@@ -10,7 +10,7 @@ class MistralAIService:
         self.api_key = settings.MISTRAL_API_KEY
         self.model = settings.MISTRAL_MODEL
         
-    async def generate_response(self, user_message: str, user_id: str = None) -> str:
+    async def generate_response(self, user_message: str, user_id: str = None, conversation_history: list = None) -> str:
         if not self.api_key:
             return "AI service is not configured. Please contact the administrator."
         
@@ -19,18 +19,35 @@ class MistralAIService:
             "Authorization": f"Bearer {self.api_key}"
         }
         
+        # Build messages with conversation history
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful AI assistant. Provide concise, helpful, and friendly responses to user questions. Use the conversation history to provide contextually relevant responses. Answers should be short and not exceed 10 words."
+            }
+        ]
+        
+        # Add conversation history if available
+        if conversation_history:
+            for msg in conversation_history:
+                messages.append({
+                    "role": "user",
+                    "content": msg.get("user_msg", "")
+                })
+                messages.append({
+                    "role": "assistant", 
+                    "content": msg.get("assistant_msg", "")
+                })
+        
+        # Add current user message
+        messages.append({
+            "role": "user",
+            "content": user_message
+        })
+        
         payload = {
             "model": self.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a helpful AI assistant. Provide concise, helpful, and friendly responses to user questions."
-                },
-                {
-                    "role": "user", 
-                    "content": user_message
-                }
-            ],
+            "messages": messages,
             "max_tokens": 500,
             "temperature": 0.7
         }
