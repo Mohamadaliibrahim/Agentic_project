@@ -1,6 +1,9 @@
 import httpx
 import json
+import logging
 from core.config import settings
+
+logger = logging.getLogger(__name__)
 
 class MistralAIService:
     """Service for interacting with Mistral AI API"""
@@ -9,6 +12,44 @@ class MistralAIService:
         self.api_endpoint = settings.MISTRAL_API_ENDPOINT
         self.api_key = settings.MISTRAL_API_KEY
         self.model = settings.MISTRAL_MODEL
+        self.max_context_tokens = 10000
+    
+    def estimate_tokens(self, text: str) -> int:
+        """
+        Simple token estimation (roughly 4 characters per token for English)
+        This is an approximation - actual tokenization may vary
+        """
+        return len(text) // 4
+    
+    def limit_conversation_history(self, conversation_history: list) -> list:
+        """
+        Limit conversation history to approximately max_context_tokens
+        Keep the most recent messages that fit within the token limit
+        """
+        if not conversation_history:
+            return []
+        
+        limited_history = []
+        total_tokens = 0
+        
+        for msg in reversed(conversation_history):
+            user_text = msg.get("user_message", "")
+            assistant_text = msg.get("assistant_message", "")
+            
+            message_tokens = self.estimate_tokens(user_text) + self.estimate_tokens(assistant_text)
+            
+            if total_tokens + message_tokens > self.max_context_tokens:
+                break
+            
+            limited_history.insert(0, msg)
+            total_tokens += message_tokens
+        
+        if len(limited_history) < len(conversation_history):
+            excluded_count = len(conversation_history) - len(limited_history)
+            logger.info(f"Token limiting: Using {len(limited_history)} recent messages, excluded {excluded_count} older messages")
+            logger.info(f"Context tokens used: ~{total_tokens}/{self.max_context_tokens}")
+        
+        return limited_history
         
     async def generate_response(self, user_message: str, user_id: str = None, conversation_history: list = None) -> str:
         if not self.api_key:
@@ -23,23 +64,26 @@ class MistralAIService:
         messages = [
             {
                 "role": "system",
-                "content": "You are a helpful AI assistant. Provide concise, helpful, and friendly responses to user questions. Use the conversation history to provide contextually relevant responses. Answers should be short and not exceed 10 words."
+                "content": "You are a helpful AI assistant. Provide concise, helpful, and friendly responses to user questions. Use the conversation history to provide contextually relevant responses."
             }
         ]
         
-        # Add conversation history if available
+        # Add conversation history if available (limited to token budget)
         if conversation_history:
-            for msg in conversation_history:
+            # Limit conversation history to fit within token budget
+            limited_history = self.limit_conversation_history(conversation_history)
+            
+            # Add the limited history to messages
+            for msg in limited_history:
                 messages.append({
                     "role": "user",
-                    "content": msg.get("user_msg", "")
+                    "content": msg.get("user_message", "")
                 })
                 messages.append({
                     "role": "assistant", 
-                    "content": msg.get("assistant_msg", "")
+                    "content": msg.get("assistant_message", "")
                 })
-        
-        # Add current user message
+
         messages.append({
             "role": "user",
             "content": user_message

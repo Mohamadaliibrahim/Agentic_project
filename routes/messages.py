@@ -3,8 +3,8 @@ Message Routes
 Chat message management endpoints
 """
 
-from fastapi import APIRouter, HTTPException, status
-from typing import List
+from fastapi import APIRouter, HTTPException, status, Query
+from typing import List, Optional
 from core import crud
 from data_validation import ChatMessageResponse, ChatMessageUpdate, ChatRequest, ChatResponse
 from pymongo.errors import PyMongoError, DuplicateKeyError, ServerSelectionTimeoutError
@@ -50,7 +50,10 @@ def handle_database_exceptions(e: Exception, operation: str = "operation"):
         )
 
 @router.post("/chat", tags=["Messages"])
-async def chat_endpoint(chat_request: ChatRequest) -> ChatResponse:
+async def chat_endpoint(
+    chat_request: ChatRequest, 
+    chat_id: Optional[str] = Query(None, description="Optional chat ID for continuing existing conversations")
+) -> ChatResponse:
     """ Enhanced chat endpoint - saves conversation to database with page-based chat IDs """
     try:
         user = await crud.get_user(chat_request.user_id)
@@ -62,21 +65,20 @@ async def chat_endpoint(chat_request: ChatRequest) -> ChatResponse:
         from data_validation import ChatMessageCreate
         message_data = ChatMessageCreate(
             user_id=chat_request.user_id,
-            user_msg=chat_request.message,
-            chat_id=chat_request.chat_id  # Pass the chat_id (or None for new page)
+            user_message=chat_request.message,
+            chat_id=chat_id  # Pass the chat_id from query parameter (or None for new page)
         )
         
         saved_message = await crud.create_chat_message(message_data)
         
         return ChatResponse(
             user_message=chat_request.message,
-            bot_response=saved_message.assistant_msg,
-            message_id=saved_message.id,
+            bot_response=saved_message.assistant_message,
+            message_id=saved_message.message_id,
             chat_id=saved_message.chat_id,  # Return the chat_id (created or provided)
             timestamp=saved_message.date
         )
     except ValueError as e:
-        # Handle invalid chat_id error
         if "does not exist" in str(e):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

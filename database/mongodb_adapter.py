@@ -42,12 +42,44 @@ class MongoDBAdapter(DatabaseInterface):
         await self.database.users.create_index("id", unique=True)
         await self.database.users.create_index("created_at")
         
-        await self.database.chat_messages.create_index("id", unique=True)
+        # Handle field migration from "id" to "message_id" for existing data
+        await self.migrate_message_id_field()
+        
+        await self.database.chat_messages.create_index("message_id", unique=True)
         await self.database.chat_messages.create_index("user_id")
         await self.database.chat_messages.create_index("chat_id")  # Index for page-based conversations
         await self.database.chat_messages.create_index("date")
         
         print("Database indexes created for pure JSON storage")
+    
+    async def migrate_message_id_field(self) -> None:
+        """Migrate existing messages from 'id' field to 'message_id' field"""
+        # First, try to drop the old id index if it exists
+        try:
+            await self.database.chat_messages.drop_index("id_1")
+            print("Dropped old 'id' index")
+        except Exception as e:
+            print(f"No old 'id' index to drop or error dropping it: {e}")
+        
+        # Check if migration is needed by looking for documents with 'id' but no 'message_id'
+        old_docs = await self.database.chat_messages.find({"id": {"$exists": True}, "message_id": {"$exists": False}}).to_list(None)
+        
+        if old_docs:
+            print(f"Migrating {len(old_docs)} messages from 'id' to 'message_id' field...")
+            
+            # Update each document
+            for doc in old_docs:
+                await self.database.chat_messages.update_one(
+                    {"_id": doc["_id"]},
+                    {
+                        "$set": {"message_id": doc["id"]},
+                        "$unset": {"id": ""}
+                    }
+                )
+            
+            print(f"Successfully migrated {len(old_docs)} messages")
+        else:
+            print("No message field migration needed")
     
     async def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new user stored as pure JSON in users table"""
@@ -90,7 +122,7 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def get_message(self, message_id: str) -> Optional[Dict[str, Any]]:
         """Get a message by ID from chat_messages table with pure JSON data"""
-        doc = await self.database.chat_messages.find_one({"id": message_id})
+        doc = await self.database.chat_messages.find_one({"message_id": message_id})
         return self._from_json_document(doc) if doc else None
     
     async def get_user_messages(self, user_id: str) -> List[Dict[str, Any]]:
@@ -109,7 +141,7 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def update_message(self, message_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a message in chat_messages table with pure JSON data"""
-        doc = await self.database.chat_messages.find_one({"id": message_id})
+        doc = await self.database.chat_messages.find_one({"message_id": message_id})
         if not doc:
             return None
         
@@ -117,7 +149,7 @@ class MongoDBAdapter(DatabaseInterface):
         current_data.update(update_data)
         
         result = await self.database.chat_messages.update_one(
-            {"id": message_id},
+            {"message_id": message_id},
             {"$set": current_data}
         )
         
@@ -127,7 +159,7 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def delete_message(self, message_id: str) -> bool:
         """Delete a message from chat_messages table"""
-        result = await self.database.chat_messages.delete_one({"id": message_id})
+        result = await self.database.chat_messages.delete_one({"message_id": message_id})
         return result.deleted_count > 0
     
     async def delete_user_messages(self, user_id: str) -> int:

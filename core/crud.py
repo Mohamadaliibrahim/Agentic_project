@@ -90,29 +90,29 @@ async def create_chat_message(message_data: ChatMessageCreate) -> ChatMessageRes
     
     # Generate AI response using Mistral AI with conversation context
     ai_response = await mistral_service.generate_response(
-        user_message=message_data.user_msg,
+        user_message=message_data.user_message,
         user_id=message_data.user_id,
         conversation_history=conversation_history
     )
     
     chat_data = {
-        "id": str(uuid.uuid4()),
+        "message_id": str(uuid.uuid4()),
         "user_id": message_data.user_id,
         "chat_id": chat_id,  # Add chat_id for page-based conversations
         "date": datetime.utcnow(),
-        "user_msg": message_data.user_msg,
-        "assistant_msg": ai_response  # Now using actual AI response from Mistral
+        "user_message": message_data.user_message,
+        "assistant_message": ai_response  # Now using actual AI response from Mistral
     }
     
     await db.create_message(chat_data)
     
     return ChatMessageResponse(
-        id=chat_data["id"],
+        message_id=chat_data["message_id"],
         user_id=chat_data["user_id"],
         chat_id=chat_data["chat_id"],  # Return the chat_id
         date=chat_data["date"],
-        user_msg=chat_data["user_msg"],
-        assistant_msg=chat_data["assistant_msg"]
+        user_message=chat_data["user_message"],
+        assistant_message=chat_data["assistant_message"]
     )
 
 async def get_chat_message(message_id: str) -> Optional[ChatMessageResponse]:
@@ -121,12 +121,12 @@ async def get_chat_message(message_id: str) -> Optional[ChatMessageResponse]:
     message = await db.get_message(message_id)
     if message:
         return ChatMessageResponse(
-            id=message["id"],
+            message_id=message["message_id"],
             user_id=message["user_id"],
             chat_id=message.get("chat_id", ""),  # Handle existing messages without chat_id
             date=message["date"],
-            user_msg=message["user_msg"],
-            assistant_msg=message["assistant_msg"]
+            user_message=message["user_message"],
+            assistant_message=message["assistant_message"]
         )
     return None
 
@@ -137,12 +137,12 @@ async def get_user_chat_messages(user_id: str) -> List[ChatMessageResponse]:
     messages = []
     for message in message_list:
         messages.append(ChatMessageResponse(
-            id=message["id"],
+            message_id=message["message_id"],
             user_id=message["user_id"],
             chat_id=message.get("chat_id", ""),  # Handle existing messages without chat_id
             date=message["date"],
-            user_msg=message["user_msg"],
-            assistant_msg=message["assistant_msg"]
+            user_message=message["user_message"],
+            assistant_message=message["assistant_message"]
         ))
     return messages
 
@@ -153,12 +153,12 @@ async def get_chat_messages_by_chat_id(chat_id: str) -> List[ChatMessageResponse
     messages = []
     for message in message_list:
         messages.append(ChatMessageResponse(
-            id=message["id"],
+            message_id=message["message_id"],
             user_id=message["user_id"],
             chat_id=message["chat_id"],
             date=message["date"],
-            user_msg=message["user_msg"],
-            assistant_msg=message["assistant_msg"]
+            user_message=message["user_message"],
+            assistant_message=message["assistant_message"]
         ))
     return messages
 
@@ -177,11 +177,11 @@ async def update_chat_message(message_id: str, update_data: dict) -> Optional[Ch
     
     if updated_message:
         return ChatMessageResponse(
-            id=updated_message["id"],
+            message_id=updated_message["message_id"],
             user_id=updated_message["user_id"],
             date=updated_message["date"],
-            user_msg=updated_message["user_msg"],
-            assistant_msg=updated_message["assistant_msg"]
+            user_message=updated_message["user_message"],
+            assistant_message=updated_message["assistant_message"]
         )
     return None
 
@@ -208,10 +208,10 @@ async def get_all_messages() -> List[ChatMessageResponse]:
     messages = []
     for message in message_list:
         messages.append(ChatMessageResponse(
-            id=message["id"],
+            message_id=message["message_id"],
             user_id=message["user_id"],
             date=message["date"],
-            user_msg=message["user_msg"],
-            assistant_msg=message["assistant_msg"]
+            user_message=message["user_message"],
+            assistant_message=message["assistant_message"]
         ))
     return messages
