@@ -118,82 +118,79 @@ async def get_chat_messages(chat_id: str):
         handle_database_exceptions(e, "retrieving chat messages")
 
 @router.get("/messages/{message_id}", response_model=ChatMessageResponse, tags=["Messages"])
-async def get_chat_message(message_id: str):
-    """ Get a specific chat message by ID """
+async def get_message(message_id: str):
+    """ Get a specific message by ID """
     try:
         message = await crud.get_chat_message(message_id)
         if not message:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Message with ID {message_id} not found"
+                detail="Message not found"
             )
         return message
-    except Exception as e:
-        handle_database_exceptions(e, "retrieving the message")
-
-@router.put("/messages/{message_id}", response_model=ChatMessageResponse, tags=["Messages"])
-async def update_chat_message(message_id: str, update_data: ChatMessageUpdate):
-    """ Update a chat message """
-    existing_message = await crud.get_chat_message(message_id)
-    if not existing_message:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Message with ID {message_id} not found"
-        )
-    
-    update_dict = update_data.dict(exclude_unset=True, exclude_none=True)
-    if not update_dict:
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No valid fields provided for update"
+            detail=f"Invalid message ID: {str(e)}"
         )
-    no_changes = True
-    for field, new_value in update_dict.items():
-        current_value = getattr(existing_message, field, None)
-        if current_value != new_value:
-            no_changes = False
-            break
-    
-    if no_changes:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="No changes detected. The provided values are identical to the current message content."
-        )
-    
-    try:
-        updated_message = await crud.update_chat_message(message_id, update_dict)
-        if not updated_message:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Message with ID {message_id} not found"
-            )
-        return updated_message
     except Exception as e:
-        handle_database_exceptions(e, "updating the message")
+        handle_database_exceptions(e, "retrieving message")
 
-@router.delete("/messages/{message_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Messages"])
-async def delete_chat_message(message_id: str):
-    """ Delete a specific chat message """
+@router.put("/messages/{message_id}", response_model=ChatMessageResponse, tags=["Messages"])
+async def update_message(message_id: str, update_data: ChatMessageUpdate):
+    """ Update a specific message """
     try:
         message = await crud.get_chat_message(message_id)
         if not message:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Message with ID {message_id} not found"
+                detail="Message not found"
+            )
+        
+        updated_message = await crud.update_chat_message(message_id, update_data)
+        if not updated_message:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update message"
+            )
+        return updated_message
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid data: {str(e)}"
+        )
+    except Exception as e:
+        handle_database_exceptions(e, "updating message")
+
+@router.delete("/messages/{message_id}", tags=["Messages"])
+async def delete_message(message_id: str):
+    """ Delete a specific message """
+    try:
+        message = await crud.get_chat_message(message_id)
+        if not message:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Message not found"
             )
         
         success = await crud.delete_chat_message(message_id)
         if not success:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Message not found or already deleted"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to delete message"
             )
+        return {"message": "Message deleted successfully"}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid message ID: {str(e)}"
+        )
     except Exception as e:
-        handle_database_exceptions(e, "deleting the message")
+        handle_database_exceptions(e, "deleting message")
 
-@router.delete("/users/{user_id}/messages", status_code=status.HTTP_204_NO_CONTENT, tags=["Messages"])
+@router.delete("/users/{user_id}/messages", tags=["Messages"])
 async def delete_user_messages(user_id: str):
-    """ Delete all chat messages for a specific usern """
+    """ Delete all messages for a specific user """
     user = await crud.get_user(user_id)
     if not user:
         raise HTTPException(
@@ -203,6 +200,21 @@ async def delete_user_messages(user_id: str):
     
     try:
         deleted_count = await crud.delete_user_chat_messages(user_id)
-        return {"detail": f"Deleted {deleted_count} messages"}
+        return {
+            "message": f"Deleted {deleted_count} messages for user {user_id}",
+            "deleted_count": deleted_count
+        }
     except Exception as e:
-        handle_database_exceptions(e, "deleting messages")
+        handle_database_exceptions(e, "deleting user messages")
+
+@router.delete("/chat/{chat_id}/messages", tags=["Messages"])
+async def delete_chat_messages(chat_id: str):
+    """ Delete all messages for a specific chat ID (page) """
+    try:
+        deleted_count = await crud.delete_chat_messages_by_chat_id(chat_id)
+        return {
+            "message": f"Deleted {deleted_count} messages for chat {chat_id}",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        handle_database_exceptions(e, "deleting chat messages")

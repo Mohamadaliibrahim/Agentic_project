@@ -82,6 +82,9 @@ async def create_chat_message(message_data: ChatMessageCreate) -> ChatMessageRes
     if message_data.chat_id and not await validate_chat_id_exists(message_data.chat_id):
         raise ValueError(f"Chat ID '{message_data.chat_id}' does not exist")
     
+    # Get the next sequential message ID for this chat
+    next_message_id = await db.get_next_message_id_for_chat(chat_id)
+    
     # Get conversation history for context-aware AI response
     conversation_history = []
     if message_data.chat_id:  # If existing chat, get previous messages
@@ -96,7 +99,7 @@ async def create_chat_message(message_data: ChatMessageCreate) -> ChatMessageRes
     )
     
     chat_data = {
-        "message_id": str(uuid.uuid4()),
+        "message_id": str(next_message_id),  # Store just the sequential number (1, 2, 3, etc.)
         "user_id": message_data.user_id,
         "chat_id": chat_id,  # Add chat_id for page-based conversations
         "date": datetime.utcnow(),
@@ -107,7 +110,7 @@ async def create_chat_message(message_data: ChatMessageCreate) -> ChatMessageRes
     await db.create_message(chat_data)
     
     return ChatMessageResponse(
-        message_id=chat_data["message_id"],
+        message_id=str(next_message_id),  # Return just the sequential number (1, 2, 3, etc.)
         user_id=chat_data["user_id"],
         chat_id=chat_data["chat_id"],  # Return the chat_id
         date=chat_data["date"],
@@ -121,7 +124,7 @@ async def get_chat_message(message_id: str) -> Optional[ChatMessageResponse]:
     message = await db.get_message(message_id)
     if message:
         return ChatMessageResponse(
-            message_id=message["message_id"],
+            message_id=message["message_id"],  # Already stored as sequential number
             user_id=message["user_id"],
             chat_id=message.get("chat_id", ""),  # Handle existing messages without chat_id
             date=message["date"],
@@ -137,7 +140,7 @@ async def get_user_chat_messages(user_id: str) -> List[ChatMessageResponse]:
     messages = []
     for message in message_list:
         messages.append(ChatMessageResponse(
-            message_id=message["message_id"],
+            message_id=message["message_id"],  # Already stored as sequential number
             user_id=message["user_id"],
             chat_id=message.get("chat_id", ""),  # Handle existing messages without chat_id
             date=message["date"],
@@ -153,7 +156,7 @@ async def get_chat_messages_by_chat_id(chat_id: str) -> List[ChatMessageResponse
     messages = []
     for message in message_list:
         messages.append(ChatMessageResponse(
-            message_id=message["message_id"],
+            message_id=message["message_id"],  # Already stored as sequential number
             user_id=message["user_id"],
             chat_id=message["chat_id"],
             date=message["date"],
@@ -177,8 +180,9 @@ async def update_chat_message(message_id: str, update_data: dict) -> Optional[Ch
     
     if updated_message:
         return ChatMessageResponse(
-            message_id=updated_message["message_id"],
+            message_id=updated_message["message_id"],  # Already stored as sequential number
             user_id=updated_message["user_id"],
+            chat_id=updated_message.get("chat_id", ""),
             date=updated_message["date"],
             user_message=updated_message["user_message"],
             assistant_message=updated_message["assistant_message"]
@@ -195,6 +199,18 @@ async def delete_user_chat_messages(user_id: str) -> int:
     db = get_db()
     return await db.delete_user_messages(user_id)
 
+async def delete_chat_messages_by_chat_id(chat_id: str) -> int:
+    """Delete all chat messages for a specific chat ID and return count of deleted messages"""
+    db = get_db()
+    # We'll need to implement this in the database adapter
+    messages = await db.get_messages_by_chat_id(chat_id)
+    count = 0
+    for message in messages:
+        success = await db.delete_message(message["message_id"])
+        if success:
+            count += 1
+    return count
+
 # Statistics
 async def get_user_message_count(user_id: str) -> int:
     """Get the count of messages for a user"""
@@ -208,8 +224,9 @@ async def get_all_messages() -> List[ChatMessageResponse]:
     messages = []
     for message in message_list:
         messages.append(ChatMessageResponse(
-            message_id=message["message_id"],
+            message_id=message["message_id"],  # Already stored as sequential number
             user_id=message["user_id"],
+            chat_id=message.get("chat_id", ""),
             date=message["date"],
             user_message=message["user_message"],
             assistant_message=message["assistant_message"]

@@ -45,21 +45,46 @@ class MongoDBAdapter(DatabaseInterface):
         # Handle field migration from "id" to "message_id" for existing data
         await self.migrate_message_id_field()
         
-        await self.database.chat_messages.create_index("message_id", unique=True)
+        # Create compound unique index on (chat_id, message_id) to allow sequential numbering per chat
+        await self.database.chat_messages.create_index([("chat_id", 1), ("message_id", 1)], unique=True)
         await self.database.chat_messages.create_index("user_id")
+        
+        # Document indexes
+        await self.database.documents.create_index("document_id", unique=True)
+        await self.database.documents.create_index("user_id")
+        await self.database.documents.create_index("upload_date")
+        
+        # Document chunks indexes
+        await self.database.document_chunks.create_index([("document_id", 1), ("chunk_index", 1)], unique=True)
+        await self.database.document_chunks.create_index("user_id")
+        await self.database.document_chunks.create_index("chunk_id", unique=True)
+        
+        # Document queries indexes
+        await self.database.document_queries.create_index("query_id", unique=True)
+        await self.database.document_queries.create_index("user_id")
+        await self.database.document_queries.create_index("document_id")
+        await self.database.document_queries.create_index("query_date")
+        
         await self.database.chat_messages.create_index("chat_id")  # Index for page-based conversations
         await self.database.chat_messages.create_index("date")
         
         print("Database indexes created for pure JSON storage")
     
     async def migrate_message_id_field(self) -> None:
-        """Migrate existing messages from 'id' field to 'message_id' field"""
+        """Migrate existing messages from 'id' field to 'message_id' field and fix indexes"""
         # First, try to drop the old id index if it exists
         try:
             await self.database.chat_messages.drop_index("id_1")
             print("Dropped old 'id' index")
         except Exception as e:
             print(f"No old 'id' index to drop or error dropping it: {e}")
+        
+        # Drop the old global unique message_id index if it exists
+        try:
+            await self.database.chat_messages.drop_index("message_id_1")
+            print("Dropped old global unique 'message_id' index")
+        except Exception as e:
+            print(f"No old 'message_id' index to drop or error dropping it: {e}")
         
         # Check if migration is needed by looking for documents with 'id' but no 'message_id'
         old_docs = await self.database.chat_messages.find({"id": {"$exists": True}, "message_id": {"$exists": False}}).to_list(None)
@@ -135,9 +160,49 @@ class MongoDBAdapter(DatabaseInterface):
     async def get_messages_by_chat_id(self, chat_id: str) -> List[Dict[str, Any]]:
         """Get all messages for a specific chat ID (page) from chat_messages table"""
         messages = []
-        async for doc in self.database.chat_messages.find({"chat_id": chat_id}).sort("date", 1):
+        # Sort by message_id as integer to maintain proper sequential order (1, 2, 3...)
+        pipeline = [
+            {"$match": {"chat_id": chat_id}},
+            {"$addFields": {
+                "message_id_int": {"$toInt": "$message_id"}
+            }},
+            {"$sort": {"message_id_int": 1}}
+        ]
+        
+        async for doc in self.database.chat_messages.aggregate(pipeline):
+            # Remove the temporary field before returning
+            if "message_id_int" in doc:
+                del doc["message_id_int"]
             messages.append(self._from_json_document(doc))
         return messages
+    
+    async def get_next_message_id_for_chat(self, chat_id: str) -> int:
+        """Get the next sequential message ID for a specific chat"""
+        # Get the current highest message_id for this chat_id (as integer)
+        pipeline = [
+            {"$match": {"chat_id": chat_id}},
+            {"$addFields": {
+                "message_id_int": {
+                    "$cond": {
+                        "if": {"$type": "$message_id"},
+                        "then": {"$toInt": "$message_id"},
+                        "else": 0
+                    }
+                }
+            }},
+            {"$sort": {"message_id_int": -1}},
+            {"$limit": 1}
+        ]
+        
+        cursor = self.database.chat_messages.aggregate(pipeline)
+        docs = await cursor.to_list(length=1)
+        
+        if docs and docs[0].get("message_id_int"):
+            current_max = docs[0]["message_id_int"]
+            return current_max + 1
+        else:
+            # No messages in this chat yet, start with 1
+            return 1
     
     async def update_message(self, message_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a message in chat_messages table with pure JSON data"""
@@ -173,3 +238,78 @@ class MongoDBAdapter(DatabaseInterface):
         async for doc in self.database.chat_messages.find().sort("date", 1):
             messages.append(self._from_json_document(doc))
         return messages
+
+    # Document storage methods
+    async def store_document(self, document_data: Dict[str, Any]) -> str:
+        """Store document metadata in documents table"""
+        doc_json = self._to_json_document(document_data, "document")
+        result = await self.database.documents.insert_one(doc_json)
+        return document_data["document_id"]
+    
+    async def store_document_chunks(self, chunks: List[Dict[str, Any]]) -> bool:
+        """Store document chunks with embeddings in document_chunks table"""
+        try:
+            chunks_json = [self._to_json_document(chunk, "chunk") for chunk in chunks]
+            await self.database.document_chunks.insert_many(chunks_json)
+            return True
+        except Exception:
+            return False
+    
+    async def get_document(self, document_id: str) -> Optional[Dict[str, Any]]:
+        """Get document metadata by document_id"""
+        doc = await self.database.documents.find_one({"document_id": document_id})
+        return self._from_json_document(doc) if doc else None
+    
+    async def get_user_documents(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all documents for a user"""
+        documents = []
+        async for doc in self.database.documents.find({"user_id": user_id}).sort("upload_date", -1):
+            documents.append(self._from_json_document(doc))
+        return documents
+    
+    async def get_document_chunks(self, document_id: str) -> List[Dict[str, Any]]:
+        """Get all chunks for a document"""
+        chunks = []
+        async for chunk in self.database.document_chunks.find({"document_id": document_id}).sort("chunk_index", 1):
+            chunks.append(self._from_json_document(chunk))
+        return chunks
+    
+    async def delete_document(self, document_id: str) -> bool:
+        """Delete document and all its chunks"""
+        try:
+            # Delete chunks first
+            await self.database.document_chunks.delete_many({"document_id": document_id})
+            # Delete document metadata
+            result = await self.database.documents.delete_one({"document_id": document_id})
+            return result.deleted_count > 0
+        except Exception:
+            return False
+
+    # Document query storage methods
+    async def store_document_query(self, query_data: Dict[str, Any]) -> str:
+        """Store a document query and its response"""
+        doc = self._to_json_document(query_data, "document_query")
+        await self.database.document_queries.insert_one(doc)
+        return query_data["query_id"]
+    
+    async def get_user_document_queries(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all document queries for a user"""
+        queries = []
+        async for query in self.database.document_queries.find({"user_id": user_id}).sort("query_date", -1):
+            queries.append(self._from_json_document(query))
+        return queries
+    
+    async def get_document_queries_by_document(self, document_id: str) -> List[Dict[str, Any]]:
+        """Get all queries for a specific document"""
+        queries = []
+        async for query in self.database.document_queries.find({"document_id": document_id}).sort("query_date", -1):
+            queries.append(self._from_json_document(query))
+        return queries
+    
+    async def delete_document_query(self, query_id: str) -> bool:
+        """Delete a document query"""
+        try:
+            result = await self.database.document_queries.delete_one({"query_id": query_id})
+            return result.deleted_count > 0
+        except Exception:
+            return False

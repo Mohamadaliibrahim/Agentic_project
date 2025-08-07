@@ -12,7 +12,7 @@ class MistralAIService:
         self.api_endpoint = settings.MISTRAL_API_ENDPOINT
         self.api_key = settings.MISTRAL_API_KEY
         self.model = settings.MISTRAL_MODEL
-        self.max_context_tokens = 10000
+        self.max_context_tokens = 10
     
     def estimate_tokens(self, text: str) -> int:
         """

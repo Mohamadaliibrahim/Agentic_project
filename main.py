@@ -9,6 +9,7 @@ from database.factory import initialize_database, close_database
 from routes.basic import router as basic_router
 from routes.users import router as users_router
 from routes.messages import router as messages_router
+from routes.documents import router as documents_router
 from startup import startup_check_sync
 
 @asynccontextmanager
@@ -39,6 +40,7 @@ app.add_middleware(
 app.include_router(basic_router)
 app.include_router(users_router)
 app.include_router(messages_router)
+app.include_router(documents_router)
 
 if __name__ == "__main__":
     print("Bot Backend Server - Starting Pre-Flight Checks...")
