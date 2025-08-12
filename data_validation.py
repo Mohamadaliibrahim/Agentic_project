@@ -52,3 +52,24 @@ class ChatResponse(BaseModel):
     message_id: str
     chat_id: str
     timestamp: datetime
+
+class DocumentQueryRequest(BaseModel):
+    """Model for document query request - searches all user documents"""
+    query: str
+    user_id: str
+    # document_id removed - now searches across all user documents
+    # chat_id moved to query parameter
+
+class DocumentQueryResponse(BaseModel):
+    """Model for document query response"""
+    answer: str
+    source_chunks: list
+    query: str
+    context_used: int
+    chat_id: str  # Return chat_id for conversation tracking
+    message_id: str  # Return message_id for tracking
+
+class ChatRequest(BaseModel):
+    """Model for sending a chat message"""
+    message: str
+    user_id: str

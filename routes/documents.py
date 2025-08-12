@@ -5,16 +5,18 @@ API endpoints for document upload, processing, and RAG querying
 
 import os
 import uuid
+import logging
 from datetime import datetime
 from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Query
 from pydantic import BaseModel
+from data_validation import DocumentQueryRequest, DocumentQueryResponse
 
 from core.document_processor import document_processor
 from core.embedding_service import embedding_service
-from core.rag_service import rag_service
 from database.factory import get_db
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Pydantic models
@@ -32,35 +34,6 @@ class DocumentInfo(BaseModel):
     total_chunks: int
     upload_date: str
     file_size: int
-
-class DocumentQueryRequest(BaseModel):
-    query: str
-    user_id: str
-    document_id: Optional[str] = None
-
-class DocumentQueryResponse(BaseModel):
-    answer: str
-    source_chunks: List[dict]
-    query: str
-    context_used: int
-
-class SourceChunk(BaseModel):
-    document_id: str
-    filename: str
-    chunk_index: int
-    text_preview: str
-    similarity_score: float
-
-class DocumentQueryHistory(BaseModel):
-    query_id: str
-    user_id: str
-    document_id: Optional[str]
-    query_text: str
-    response_text: str
-    source_chunks: List[dict]
-    context_used: int
-    query_date: str
-    response_quality: str
 
 @router.post("/documents/upload", response_model=DocumentUploadResponse, tags=["Documents"])
 async def upload_document(
@@ -98,57 +71,19 @@ async def upload_document(
                 detail="File size too large. Maximum allowed size is 10MB."
             )
         
-        # Process document
-        document_info = await document_processor.process_document(
+        # Process document using the new vector storage approach (like rag_testing notebook)
+        document_result = await document_processor.process_and_store_document(
             file_content=file_content,
             filename=file.filename,
             user_id=user_id
         )
         
-        # Generate embeddings for chunks
-        chunk_texts = [chunk["text"] for chunk in document_info["chunks"]]
-        embeddings = await embedding_service.generate_embeddings(chunk_texts)
-        
-        # Prepare document metadata for storage
-        upload_date = datetime.utcnow().isoformat()
-        document_metadata = {
-            "document_id": document_info["document_id"],
-            "filename": document_info["filename"],
-            "file_type": document_info["file_type"],
-            "user_id": user_id,
-            "total_chunks": document_info["total_chunks"],
-            "upload_date": upload_date,
-            "file_size": file_size,
-            "total_characters": document_info["total_characters"]
-        }
-        
-        # Prepare chunks with embeddings for storage
-        chunks_with_embeddings = []
-        for i, chunk in enumerate(document_info["chunks"]):
-            chunk_with_embedding = {
-                "chunk_id": chunk["chunk_id"],
-                "document_id": document_info["document_id"],
-                "filename": document_info["filename"],
-                "user_id": user_id,
-                "chunk_index": chunk["chunk_index"],
-                "text": chunk["text"],
-                "word_count": chunk["word_count"],
-                "character_count": chunk["character_count"],
-                "embedding": embeddings[i]
-            }
-            chunks_with_embeddings.append(chunk_with_embedding)
-        
-        # Store in database
-        db = get_db()
-        await db.store_document(document_metadata)
-        await db.store_document_chunks(chunks_with_embeddings)
-        
         return DocumentUploadResponse(
-            document_id=document_info["document_id"],
-            filename=document_info["filename"],
-            file_type=document_info["file_type"],
-            total_chunks=document_info["total_chunks"],
-            message=f"Document '{file.filename}' uploaded and processed successfully. {document_info['total_chunks']} chunks created."
+            document_id=document_result["document_id"],
+            filename=document_result["filename"],
+            file_type=document_result["file_type"],
+            total_chunks=document_result["total_chunks"],
+            message=document_result["message"]
         )
         
     except HTTPException:
@@ -157,62 +92,6 @@ async def upload_document(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to process document: {str(e)}"
-        )
-
-@router.post("/documents/query", response_model=DocumentQueryResponse, tags=["Documents"])
-async def query_documents(request: DocumentQueryRequest):
-    """
-    Query documents using RAG (Retrieval-Augmented Generation)
-    
-    Finds relevant document chunks and generates an answer using Mistral AI.
-    The query and response are automatically saved to the database.
-    """
-    try:
-        if not request.query.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Query cannot be empty"
-            )
-        
-        # Note: user_id is now passed in the request
-        user_id = request.user_id
-        
-        # Perform RAG query
-        result = await rag_service.query_documents(
-            query=request.query,
-            user_id=user_id,
-            document_id=request.document_id
-        )
-        
-        # Store the query and response in database
-        try:
-            query_data = {
-                "query_id": str(uuid.uuid4()),
-                "user_id": user_id,
-                "document_id": request.document_id,
-                "query_text": request.query,
-                "response_text": result["answer"],
-                "source_chunks": result["source_chunks"],
-                "context_used": result["context_used"],
-                "query_date": datetime.utcnow().isoformat(),
-                "response_quality": "success" if result["context_used"] > 0 else "no_context"
-            }
-            
-            db = get_db()
-            await db.store_document_query(query_data)
-            
-        except Exception as e:
-            # Log the error but don't fail the query
-            print(f"Warning: Failed to store query in database: {str(e)}")
-        
-        return DocumentQueryResponse(**result)
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to query documents: {str(e)}"
         )
 
 @router.get("/documents", response_model=List[DocumentInfo], tags=["Documents"])
@@ -345,68 +224,122 @@ async def get_document_chunks(document_id: str):
             detail=f"Failed to retrieve document chunks: {str(e)}"
         )
 
-@router.get("/documents/queries/history", response_model=List[DocumentQueryHistory], tags=["Documents"])
-async def get_user_query_history(user_id: str = Query(...)):
-    """Get all document query history for a user"""
+@router.post("/documents/query", response_model=DocumentQueryResponse, tags=["Documents"])
+async def query_documents(
+    request: DocumentQueryRequest,
+    chat_id: Optional[str] = Query(None, description="Optional chat ID for continuing existing conversations")
+):
+    """
+    Query documents with RAG and conversation memory
+    
+    This endpoint allows users to ask questions about their uploaded documents.
+    It supports conversation memory by tracking chat_id, so users can ask
+    follow-up questions and reference previous parts of the conversation.
+    
+    Example conversation:
+    1. "What is machine learning?" -> Returns answer with new chat_id
+    2. "How is it different from AI?" -> Uses same chat_id, references previous Q&A
+    3. "What was my first question?" -> Can answer "What is machine learning?"
+    """
     try:
-        db = get_db()
-        queries = await db.get_user_document_queries(user_id)
+        from core.rag_service import rag_service
+        from core import crud
+        import uuid
+        from datetime import datetime
         
-        return [
-            DocumentQueryHistory(
-                query_id=query["query_id"],
-                user_id=query["user_id"],
-                document_id=query.get("document_id"),
-                query_text=query["query_text"],
-                response_text=query["response_text"],
-                source_chunks=query.get("source_chunks", []),
-                context_used=query.get("context_used", 0),
-                query_date=query["query_date"],
-                response_quality=query.get("response_quality", "unknown")
-            )
-            for query in queries
-        ]
+        # Generate chat_id if not provided (new conversation)
+        chat_id = chat_id if chat_id else str(uuid.uuid4())
         
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve query history: {str(e)}"
+        # Get conversation history for this chat to provide context
+        conversation_history = []
+        if chat_id:  # If existing chat, get previous messages
+            db = get_db()
+            previous_messages = await db.get_messages_by_chat_id(chat_id)
+            conversation_history = previous_messages
+        
+        # Query documents using RAG - searches across all user documents
+        rag_result = await rag_service.query_documents(
+            query=request.query,
+            user_id=request.user_id  # Removed document_id - searches all user documents
         )
+        
+        # Enhance the RAG response with conversation context if available
+        if conversation_history:
+            # Build conversation context for the AI
+            context_messages = []
+            for msg in conversation_history[-5:]:  # Last 5 exchanges for context
+                context_messages.append(f"Previous Q: {msg.get('user_message', '')}")
+                context_messages.append(f"Previous A: {msg.get('assistant_message', '')}")
+            
+            conversation_context = "\n".join(context_messages)
+            
+            # Enhanced prompt that includes conversation history
+            enhanced_prompt = f"""You are answering questions about documents. Use the conversation history to provide contextually relevant responses.
 
-@router.get("/documents/{document_id}/queries", response_model=List[DocumentQueryHistory], tags=["Documents"])
-async def get_document_query_history(document_id: str):
-    """Get all queries made for a specific document"""
-    try:
+Conversation History:
+{conversation_context}
+
+Document Context:
+{rag_result.get('context_used', 0)} relevant document chunks found.
+
+Current Question: {request.query}
+
+Document Information: {rag_result['answer']}
+
+Instructions:
+- Answer the current question using both the document context and conversation history
+- If the user asks about previous questions or answers, reference the conversation history
+- If asking about relationships between current and previous topics, explain the connections
+- Be specific and helpful
+
+Answer:"""
+            
+            # Generate enhanced response using Mistral with conversation context
+            from core.mistral_service import mistral_service
+            enhanced_answer = await mistral_service.generate_response(
+                user_message=enhanced_prompt,
+                user_id=request.user_id,
+                conversation_history=conversation_history
+            )
+            
+            # Use enhanced answer if it's significantly different
+            if len(enhanced_answer) > len(rag_result['answer']) * 0.8:
+                rag_result['answer'] = enhanced_answer
+        
+        # Store this query and response in the messages table for conversation memory
         db = get_db()
-        # Check if document exists
-        document = await db.get_document(document_id)
-        if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Document not found"
-            )
+        next_message_id = await db.get_next_message_id_for_chat(chat_id)
         
-        queries = await db.get_document_queries_by_document(document_id)
+        # Prepare source chunks information for storage
+        source_info = ""
+        if rag_result.get('source_chunks'):
+            source_info = f" [Sources: {len(rag_result['source_chunks'])} document chunks]"
         
-        return [
-            DocumentQueryHistory(
-                query_id=query["query_id"],
-                user_id=query["user_id"],
-                document_id=query["document_id"],
-                query_text=query["query_text"],
-                response_text=query["response_text"],
-                source_chunks=query.get("source_chunks", []),
-                context_used=query.get("context_used", 0),
-                query_date=query["query_date"],
-                response_quality=query.get("response_quality", "unknown")
-            )
-            for query in queries
-        ]
+        message_data = {
+            "message_id": str(next_message_id),
+            "user_id": request.user_id,
+            "chat_id": chat_id,
+            "date": datetime.utcnow(),
+            "user_message": request.query,
+            "assistant_message": rag_result['answer'] + source_info,
+            "query_type": "document_query",  # Mark this as a document query
+            "source_chunks": rag_result.get('source_chunks', [])  # Store source chunks
+        }
         
-    except HTTPException:
-        raise
+        await db.create_message(message_data)
+        
+        return DocumentQueryResponse(
+            answer=rag_result['answer'],
+            source_chunks=rag_result.get('source_chunks', []),
+            query=request.query,
+            context_used=rag_result.get('context_used', 0),
+            chat_id=chat_id,
+            message_id=str(next_message_id)
+        )
+        
     except Exception as e:
+        logger.error(f"Error in document query: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve document query history: {str(e)}"
+            detail=f"Failed to query documents: {str(e)}"
         )

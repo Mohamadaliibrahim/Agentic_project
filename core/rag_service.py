@@ -21,31 +21,30 @@ class RAGService:
     async def query_documents(
         self, 
         query: str, 
-        user_id: str, 
-        document_id: Optional[str] = None
+        user_id: str
     ) -> Dict[str, Any]:
         """
-        Query documents using RAG approach
+        Query documents using RAG approach with shared vector_storage (like rag_testing notebook)
+        Searches across ALL user documents in shared .pkl file (no document_id needed)
         
         Args:
             query: User's question
             user_id: ID of the user making the query
-            document_id: Optional specific document ID to query
             
         Returns:
             Dictionary with answer and source chunks
         """
         try:
-            query_embeddings = await embedding_service.generate_embeddings([query])
-            query_embedding = query_embeddings[0]
+            # Use the shared vector storage search directly 
+            from core.document_processor import document_processor
             
-            relevant_chunks = await self._find_relevant_chunks(
-                query_embedding, 
-                user_id, 
-                document_id
+            search_results = await document_processor.search_user_documents(
+                user_id=user_id,
+                query=query,
+                top_k=self.max_context_chunks
             )
             
-            if not relevant_chunks:
+            if not search_results:
                 return {
                     "answer": "I couldn't find any relevant information in your documents to answer this question.",
                     "source_chunks": [],
@@ -53,8 +52,25 @@ class RAGService:
                     "context_used": 0
                 }
             
+            # Convert search results to relevant chunks format
+            relevant_chunks = []
+            for result in search_results:
+                metadata = result["metadata"]
+                chunk_data = {
+                    "text": metadata["content"],
+                    "document_id": metadata["document_id"],  # Keep for tracking
+                    "chunk_id": metadata.get("chunk_id", ""),
+                    "chunk_index": metadata.get("chunk_index", 0),  # Add chunk_index
+                    "filename": metadata["filename"],
+                    "similarity_score": result["score"],
+                    "published_date": metadata["published_date"]
+                }
+                relevant_chunks.append(chunk_data)
+            
+            # Prepare context from chunks
             context = self._prepare_context(relevant_chunks)
             
+            # Generate RAG response
             answer = await self._generate_rag_response(query, context)
             
             response = {
@@ -64,7 +80,7 @@ class RAGService:
                 "context_used": len(relevant_chunks)
             }
             
-            logger.info(f"RAG query completed: {len(relevant_chunks)} chunks used")
+            logger.info(f"RAG query completed: {len(relevant_chunks)} chunks used from shared storage")
             return response
             
         except Exception as e:
@@ -72,48 +88,9 @@ class RAGService:
             return {
                 "answer": f"An error occurred while processing your question: {str(e)}",
                 "source_chunks": [],
-                "query": query
+                "query": query,
+                "context_used": 0
             }
-    
-    async def _find_relevant_chunks(
-        self, 
-        query_embedding: List[float], 
-        user_id: str, 
-        document_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Find the most relevant document chunks for a query"""
-        try:
-            db = get_db()
-            
-            filter_criteria = {"user_id": user_id}
-            if document_id:
-                filter_criteria["document_id"] = document_id
-            
-            chunks_cursor = db.database.document_chunks.find(filter_criteria)
-            chunks = await chunks_cursor.to_list(length=None)
-            
-            if not chunks:
-                return []
-            
-            chunk_embeddings = [chunk["embedding"] for chunk in chunks]
-            similarities = embedding_service.find_most_similar(
-                query_embedding, 
-                chunk_embeddings, 
-                top_k=self.max_context_chunks
-            )
-            
-            relevant_chunks = []
-            for sim in similarities:
-                if sim["similarity"] > 0.1:
-                    chunk = chunks[sim["index"]]
-                    chunk["similarity_score"] = sim["similarity"]
-                    relevant_chunks.append(chunk)
-            
-            return relevant_chunks
-            
-        except Exception as e:
-            logger.error(f"Error finding relevant chunks: {str(e)}")
-            return []
     
     def _prepare_context(self, chunks: List[Dict[str, Any]]) -> str:
         """Prepare context string from relevant chunks"""

@@ -1,26 +1,30 @@
 """
 Embedding Service
-Generates embeddings for text chunks and handles similarity search
+Generates embeddings for text chunks using Mistral AI API and handles similarity search
 """
 
 import logging
 import numpy as np
+import httpx
+import json
 from typing import List, Dict, Any
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
 class EmbeddingService:
-    """Service for generating and managing text embeddings"""
+    """Service for generating and managing text embeddings using Mistral AI"""
     
     def __init__(self):
-        # For now, we'll use a simple method, but this can be extended
-        # to use OpenAI embeddings, sentence-transformers, or other services
-        self.embedding_dimension = 384  # Common dimension for sentence-transformers
-        self.use_local_embeddings = True  # Set to False to use external API
+        self.api_endpoint = settings.MISTRAL_API_EMBEDDING
+        self.api_key = settings.MISTRAL_API_KEY
+        self.model = settings.MISTRAL_EMBEDDING_MODEL
+        self.embedding_dimension = 1024  # Mistral codestral-embed dimension
+        self.use_mistral_api = True if self.api_key else False
     
     async def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
-        Generate embeddings for a list of texts
+        Generate embeddings for a list of texts using Mistral API
         
         Args:
             texts: List of text strings to embed
@@ -29,22 +33,87 @@ class EmbeddingService:
             List of embedding vectors
         """
         try:
-            if self.use_local_embeddings:
-                return await self._generate_simple_embeddings(texts)
+            if self.use_mistral_api and self.api_key:
+                return await self._generate_mistral_embeddings(texts)
             else:
-                # Future: implement external embedding API calls
-                return await self._generate_api_embeddings(texts)
+                logger.warning("Mistral API not configured, falling back to simple embeddings")
+                return await self._generate_simple_embeddings(texts)
                 
         except Exception as e:
             logger.error(f"Error generating embeddings: {str(e)}")
-            raise Exception(f"Failed to generate embeddings: {str(e)}")
+            # Fallback to simple embeddings if API fails
+            logger.warning("Falling back to simple embeddings due to API error")
+            return await self._generate_simple_embeddings(texts)
+    
+    async def _generate_mistral_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate embeddings using Mistral AI API
+        """
+        if not self.api_key:
+            raise Exception("Mistral API key not configured")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        
+        # Mistral API accepts batch requests, but let's process in smaller batches
+        batch_size = 10  # Process 10 texts at a time
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
+            
+            payload = {
+                "model": self.model,
+                "input": batch_texts
+            }
+            
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    response = await client.post(
+                        self.api_endpoint,
+                        headers=headers,
+                        json=payload
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        
+                        if "data" in result:
+                            batch_embeddings = [item["embedding"] for item in result["data"]]
+                            all_embeddings.extend(batch_embeddings)
+                        else:
+                            logger.error(f"Unexpected response format from Mistral API: {result}")
+                            raise Exception("Invalid response format from Mistral API")
+                            
+                    elif response.status_code == 401:
+                        raise Exception("Mistral API authentication failed")
+                    elif response.status_code == 429:
+                        raise Exception("Mistral API rate limit exceeded")
+                    else:
+                        error_text = response.text if hasattr(response, 'text') else str(response.status_code)
+                        raise Exception(f"Mistral API error {response.status_code}: {error_text}")
+                        
+            except httpx.TimeoutException:
+                raise Exception("Mistral embedding API request timed out")
+            except httpx.RequestError as e:
+                raise Exception(f"Mistral embedding API request failed: {str(e)}")
+            except json.JSONDecodeError:
+                raise Exception("Mistral embedding API returned invalid JSON")
+        
+        logger.info(f"Generated {len(all_embeddings)} embeddings using Mistral API")
+        return all_embeddings
     
     async def _generate_simple_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
         Generate simple embeddings using text characteristics
-        This is a basic implementation - in production, use proper embedding models
+        This is a fallback implementation when Mistral API is not available
         """
         embeddings = []
+        
+        # Use smaller dimension for simple embeddings (384) but pad to match Mistral
+        simple_dimension = 384
         
         for text in texts:
             words = text.lower().split()
@@ -65,18 +134,24 @@ class EmbeddingService:
             for word in common_words:
                 features.append(text.lower().count(word))
             
-            # Pad or truncate to desired dimension
-            while len(features) < self.embedding_dimension:
+            # Pad or truncate to simple dimension first
+            while len(features) < simple_dimension:
                 features.append(0.0)
             
-            features = features[:self.embedding_dimension]
+            features = features[:simple_dimension]
 
+            # Normalize the features
             norm = np.linalg.norm(features)
             if norm > 0:
                 features = [f / norm for f in features]
             
+            # Pad to match Mistral dimension (1024) for compatibility
+            while len(features) < self.embedding_dimension:
+                features.append(0.0)
+            
             embeddings.append(features)
         
+        logger.warning(f"Generated {len(embeddings)} simple embeddings (fallback mode)")
         return embeddings
     
     async def _generate_api_embeddings(self, texts: List[str]) -> List[List[float]]:

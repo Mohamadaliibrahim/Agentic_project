@@ -7,7 +7,7 @@ class Settings:
     """Application settings"""
     
     HOST: str = "127.0.0.1"
-    PORT: int = 8011
+    PORT: int = 8000
     RELOAD: bool = True
     LOG_LEVEL: str = "info"
     
@@ -27,5 +27,7 @@ class Settings:
     MISTRAL_API_ENDPOINT: str = os.getenv("MISTRAL_API_ENDPOINT", "https://api.mistral.ai/v1/chat/completions")
     MISTRAL_API_KEY: str = os.getenv("MISTRAL_API_KEY", "")
     MISTRAL_MODEL: str = os.getenv("MISTRAL_MODEL", "mistral-small-2503")
+    MISTRAL_API_EMBEDDING: str = os.getenv("MISTRAL_API_EMBEDDING", "https://api.mistral.ai/v1/embeddings")
+    MISTRAL_EMBEDDING_MODEL: str = os.getenv("MISTRAL_EMBEDDING_MODEL", "codestral-embed")
 
 settings = Settings()
