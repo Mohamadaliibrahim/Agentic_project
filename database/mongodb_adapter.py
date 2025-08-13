@@ -42,27 +42,22 @@ class MongoDBAdapter(DatabaseInterface):
         await self.database.users.create_index("id", unique=True)
         await self.database.users.create_index("created_at")
         
-        # Handle field migration from "id" to "message_id" for existing data
         await self.migrate_message_id_field()
         
-        # Create compound unique index on (chat_id, message_id) to allow sequential numbering per chat
         await self.database.chat_messages.create_index([("chat_id", 1), ("message_id", 1)], unique=True)
         await self.database.chat_messages.create_index("user_id")
         
-        # Document indexes
         await self.database.documents.create_index("document_id", unique=True)
         await self.database.documents.create_index("user_id")
         await self.database.documents.create_index("upload_date")
         
-        # Document chunks indexes
         await self.database.document_chunks.create_index([("document_id", 1), ("chunk_index", 1)], unique=True)
         await self.database.document_chunks.create_index("user_id")
         await self.database.document_chunks.create_index("chunk_id", unique=True)
         
-        await self.database.chat_messages.create_index("chat_id")  # Index for page-based conversations
+        await self.database.chat_messages.create_index("chat_id")
         await self.database.chat_messages.create_index("date")
         
-        # Chat collections indexes
         await self.database.chat_collections.create_index("chat_id", unique=True)
         await self.database.chat_collections.create_index("user_id")
         await self.database.chat_collections.create_index("creation_date")
@@ -71,27 +66,23 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def migrate_message_id_field(self) -> None:
         """Migrate existing messages from 'id' field to 'message_id' field and fix indexes"""
-        # First, try to drop the old id index if it exists
         try:
             await self.database.chat_messages.drop_index("id_1")
             print("Dropped old 'id' index")
         except Exception as e:
             print(f"No old 'id' index to drop or error dropping it: {e}")
         
-        # Drop the old global unique message_id index if it exists
         try:
             await self.database.chat_messages.drop_index("message_id_1")
             print("Dropped old global unique 'message_id' index")
         except Exception as e:
             print(f"No old 'message_id' index to drop or error dropping it: {e}")
         
-        # Check if migration is needed by looking for documents with 'id' but no 'message_id'
         old_docs = await self.database.chat_messages.find({"id": {"$exists": True}, "message_id": {"$exists": False}}).to_list(None)
         
         if old_docs:
             print(f"Migrating {len(old_docs)} messages from 'id' to 'message_id' field...")
             
-            # Update each document
             for doc in old_docs:
                 await self.database.chat_messages.update_one(
                     {"_id": doc["_id"]},
@@ -159,7 +150,6 @@ class MongoDBAdapter(DatabaseInterface):
     async def get_messages_by_chat_id(self, chat_id: str) -> List[Dict[str, Any]]:
         """Get all messages for a specific chat ID (page) from chat_messages table"""
         messages = []
-        # Sort by message_id as integer to maintain proper sequential order (1, 2, 3...)
         pipeline = [
             {"$match": {"chat_id": chat_id}},
             {"$addFields": {
@@ -169,7 +159,6 @@ class MongoDBAdapter(DatabaseInterface):
         ]
         
         async for doc in self.database.chat_messages.aggregate(pipeline):
-            # Remove the temporary field before returning
             if "message_id_int" in doc:
                 del doc["message_id_int"]
             messages.append(self._from_json_document(doc))
@@ -177,7 +166,6 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def get_next_message_id_for_chat(self, chat_id: str) -> int:
         """Get the next sequential message ID for a specific chat"""
-        # Get the current highest message_id for this chat_id (as integer)
         pipeline = [
             {"$match": {"chat_id": chat_id}},
             {"$addFields": {
@@ -200,7 +188,6 @@ class MongoDBAdapter(DatabaseInterface):
             current_max = docs[0]["message_id_int"]
             return current_max + 1
         else:
-            # No messages in this chat yet, start with 1
             return 1
     
     async def update_message(self, message_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -242,14 +229,14 @@ class MongoDBAdapter(DatabaseInterface):
         """Get all chats for a user with basic info for collection view"""
         pipeline = [
             {"$match": {"user_id": user_id}},
-            {"$sort": {"date": 1}},  # Sort by date to get first message
+            {"$sort": {"date": 1}},
             {"$group": {
                 "_id": "$chat_id",
                 "chat_id": {"$first": "$chat_id"},
                 "first_message": {"$first": "$user_message"},
                 "creation_date": {"$first": "$date"}
             }},
-            {"$sort": {"creation_date": -1}}  # Sort chats by newest first
+            {"$sort": {"creation_date": -1}}
         ]
         
         chats = []
@@ -271,7 +258,6 @@ class MongoDBAdapter(DatabaseInterface):
     async def update_chat_collection_item(self, chat_id: str, update_data: Dict[str, Any]) -> bool:
         """Update chat collection item in chat_collections table"""
         try:
-            # Remove any None values and prepare update document
             update_doc = {k: v for k, v in update_data.items() if v is not None}
             if not update_doc:
                 return False
@@ -299,7 +285,6 @@ class MongoDBAdapter(DatabaseInterface):
         except Exception:
             return False
 
-    # Document storage methods
     async def store_document(self, document_data: Dict[str, Any]) -> str:
         """Store document metadata in documents table"""
         doc_json = self._to_json_document(document_data, "document")
@@ -337,9 +322,7 @@ class MongoDBAdapter(DatabaseInterface):
     async def delete_document(self, document_id: str) -> bool:
         """Delete document and all its chunks"""
         try:
-            # Delete chunks first
             await self.database.document_chunks.delete_many({"document_id": document_id})
-            # Delete document metadata
             result = await self.database.documents.delete_one({"document_id": document_id})
             return result.deleted_count > 0
         except Exception:

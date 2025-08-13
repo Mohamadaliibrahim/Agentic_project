@@ -98,5 +98,4 @@ class VectorDB:
             logger.error(f"Error deleting vector data for user {user_id}: {e}")
             return False
 
-# Global instance
 vector_db = VectorDB()

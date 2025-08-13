@@ -23,7 +23,6 @@ async def save_chunks(file_id: str, chunk_list: List[str]) -> bool:
     try:
         db = get_db()
         
-        # Prepare chunks with metadata
         chunks_with_metadata = []
         for i, chunk_text in enumerate(chunk_list):
             chunk_data = {
@@ -33,7 +32,7 @@ async def save_chunks(file_id: str, chunk_list: List[str]) -> bool:
                 "text": chunk_text,
                 "word_count": len(chunk_text.split()),
                 "character_count": len(chunk_text),
-                "embedding": None  # Will be set during embedding generation
+                "embedding": None
             }
             chunks_with_metadata.append(chunk_data)
         

@@ -1,7 +1,7 @@
 import asyncio
 import sys
 import os
-from typing import List, Tuple
+from typing import List
 from motor.motor_asyncio import AsyncIOMotorClient
 import httpx
 from dotenv import load_dotenv

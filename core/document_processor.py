@@ -63,7 +63,6 @@ class DocumentProcessor:
         self.encoding_name = 'cl100k_base'
         self.separators = ["###", "\n\n\n", "\n\n", "\n"]
         
-        # Initialize tiktoken encoder
         if tiktoken:
             self.encoder = tiktoken.get_encoding(self.encoding_name)
         else:
@@ -96,20 +95,16 @@ class DocumentProcessor:
             Dict containing document info and text chunks
         """
         try:
-            # Generate document ID
             doc_id = str(uuid.uuid4())
             
-            # Get file extension
             file_ext = os.path.splitext(filename)[1].lower()
             
             if file_ext not in self.supported_types:
                 raise ValueError(f"Unsupported file type: {file_ext}")
             
-            # Process document based on type
             processor = self.supported_types[file_ext]
             text_content = await processor(file_content, filename)
             
-            # Validate text content
             if text_content is None:
                 raise Exception(f"Text extraction returned None for {filename}")
             
@@ -119,13 +114,11 @@ class DocumentProcessor:
             if not text_content.strip():
                 raise Exception(f"No text content extracted from {filename}")
             
-            # Split into chunks
             chunks = self._create_chunks(text_content)
             
             if not chunks:
                 raise Exception(f"No chunks created from {filename}")
             
-            # Create document metadata
             document_info = {
                 "document_id": doc_id,
                 "filename": filename,
@@ -170,7 +163,6 @@ class DocumentProcessor:
                     continue
             
             if pages_with_text == 0:
-                # Try alternative extraction methods or provide a helpful error
                 raise Exception(f"No readable text found in PDF '{filename}'. The PDF might be image-based or corrupted.")
             
             text_content = text_content.strip()
@@ -182,14 +174,13 @@ class DocumentProcessor:
             
         except Exception as e:
             if "No readable text found" in str(e) or "contains only empty pages" in str(e):
-                raise e  # Re-raise our custom messages
+                raise e 
             else:
                 raise Exception(f"Error processing PDF '{filename}': {str(e)}")
     
     async def _process_text(self, file_content: bytes, filename: str) -> str:
         """Process plain text file"""
         try:
-            # Try different encodings
             encodings = ['utf-8', 'utf-16', 'latin-1', 'cp1252']
             
             for encoding in encodings:
@@ -210,7 +201,6 @@ class DocumentProcessor:
             raise Exception("pandas not installed. Install with: pip install pandas")
         
         try:
-            # Try different encodings for CSV
             encodings = ['utf-8', 'latin-1', 'cp1252']
             
             for encoding in encodings:
@@ -219,12 +209,10 @@ class DocumentProcessor:
                     csv_file = StringIO(csv_text)
                     df = pd.read_csv(csv_file)
                     
-                    # Convert DataFrame to readable text
                     text_content = f"CSV File: {filename}\n"
                     text_content += f"Columns: {', '.join(df.columns.tolist())}\n"
                     text_content += f"Number of rows: {len(df)}\n\n"
                     
-                    # Add column descriptions
                     text_content += "Column Information:\n"
                     for col in df.columns:
                         text_content += f"- {col}: {df[col].dtype}\n"
@@ -232,7 +220,7 @@ class DocumentProcessor:
                     text_content += "\nData Summary:\n"
                     text_content += df.describe(include='all').to_string()
                     
-                    # Add first few rows as examples
+
                     text_content += f"\n\nFirst 10 rows:\n"
                     text_content += df.head(10).to_string()
                     
@@ -241,7 +229,7 @@ class DocumentProcessor:
                 except UnicodeDecodeError:
                     continue
                 except Exception as e:
-                    if encoding == encodings[-1]:  # Last encoding attempt
+                    if encoding == encodings[-1]:
                         raise e
                     continue
             
@@ -256,7 +244,6 @@ class DocumentProcessor:
             raise Exception("python-docx not installed. Install with: pip install python-docx")
         
         try:
-            # Save to temporary file since python-docx needs file path
             with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
                 temp_file.write(file_content)
                 temp_file_path = temp_file.name
@@ -269,7 +256,6 @@ class DocumentProcessor:
                     if paragraph.text.strip():
                         text_content += paragraph.text + "\n"
                 
-                # Extract table content
                 for table in doc.tables:
                     text_content += "\n--- Table ---\n"
                     for row in table.rows:
@@ -282,7 +268,6 @@ class DocumentProcessor:
                 return text_content
                 
             finally:
-                # Clean up temporary file
                 os.unlink(temp_file_path)
                 
         except Exception as e:
@@ -294,7 +279,6 @@ class DocumentProcessor:
         
         try:
             if RecursiveCharacterTextSplitter and self.encoder:
-                # Use langchain RecursiveCharacterTextSplitter with tiktoken
                 text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
                     chunk_size=self.chunk_size, 
                     chunk_overlap=self.overlap, 
@@ -302,13 +286,10 @@ class DocumentProcessor:
                     encoding_name=self.encoding_name
                 )
                 
-                # Split the text
                 chunk_texts = text_splitter.split_text(text)
                 
-                # Create chunk objects with metadata
                 for i, chunk_text in enumerate(chunk_texts):
                     if chunk_text.strip():
-                        # Count tokens using tiktoken
                         token_count = len(self.encoder.encode(chunk_text))
                         
                         chunk_info = {
@@ -324,7 +305,6 @@ class DocumentProcessor:
                 logger.info(f"Created {len(chunks)} chunks using tiktoken cl100k_base encoding")
                 
             else:
-                # Fallback to simple word-based chunking
                 logger.warning("tiktoken or langchain not available, using simple word-based chunking")
                 words = text.split()
                 
@@ -339,13 +319,12 @@ class DocumentProcessor:
                             "chunk_index": len(chunks),
                             "word_count": len(chunk_words),
                             "character_count": len(chunk_text),
-                            "token_count": len(chunk_words)  # Approximate token count
+                            "token_count": len(chunk_words)
                         }
                         chunks.append(chunk_info)
                 
         except Exception as e:
             logger.error(f"Error in tiktoken chunking, falling back to simple chunking: {str(e)}")
-            # Fallback to simple word-based chunking
             words = text.split()
             
             for i in range(0, len(words), self.chunk_size - self.overlap):
@@ -359,7 +338,7 @@ class DocumentProcessor:
                         "chunk_index": len(chunks),
                         "word_count": len(chunk_words),
                         "character_count": len(chunk_text),
-                        "token_count": len(chunk_words)  # Approximate token count
+                        "token_count": len(chunk_words)
                     }
                     chunks.append(chunk_info)
         
@@ -384,47 +363,36 @@ class DocumentProcessor:
             Dict containing document info and storage details
         """
         try:
-            # Process document first to get text and chunks
             document_info = await self.process_document(file_content, filename, user_id)
             
-            # Extract chunks for embedding
             chunks = document_info["chunks"]
             chunk_texts = [chunk["text"] for chunk in chunks]
             
-            # Generate embeddings using the embedding service
             from core.embedding_service import embedding_service
             embeddings = await embedding_service.generate_embeddings(chunk_texts)
             
-            # Convert embeddings to numpy array and normalize like in notebook
             embeddings_array = np.array(embeddings, dtype=np.float32)
             norms = np.linalg.norm(embeddings_array, axis=1, keepdims=True)
             norms[norms == 0] = 1e-9
             normalized_embeddings = embeddings_array / norms
             
-            # Create vector_storage directory for user
             vector_dir = f"vector_storage/{user_id}"
             os.makedirs(vector_dir, exist_ok=True)
             
-            # Shared files for all user documents (no document_id in filename)
             index_file = os.path.join(vector_dir, "index.faiss")
             metadata_file = os.path.join(vector_dir, "metadata.pkl")
             
-            # Load existing data if files exist
             existing_metadata = []
             existing_embeddings = None
             
             if os.path.exists(metadata_file) and os.path.exists(index_file):
                 try:
-                    # Load existing metadata
                     with open(metadata_file, "rb") as f:
                         existing_metadata = pickle.load(f)
                     
-                    # Load existing FAISS index
                     existing_index = faiss.read_index(index_file)
                     
-                    # Check if the index has data and is compatible
                     if existing_index.ntotal > 0:
-                        # Extract existing embeddings with proper type handling
                         existing_embeddings = np.zeros((existing_index.ntotal, existing_index.d), dtype=np.float32)
                         
                         try:
@@ -432,7 +400,6 @@ class DocumentProcessor:
                             logger.info(f"Loaded existing {len(existing_metadata)} chunks for user {user_id}")
                         except Exception as reconstruct_error:
                             logger.warning(f"Could not reconstruct embeddings from existing index: {reconstruct_error}. Will rebuild index.")
-                            # Try to get embeddings from metadata instead
                             if existing_metadata and all('embedding' in meta for meta in existing_metadata):
                                 existing_embeddings = np.array([meta['embedding'] for meta in existing_metadata], dtype=np.float32)
                                 logger.info(f"Recovered embeddings from metadata for {len(existing_metadata)} chunks")
@@ -450,7 +417,6 @@ class DocumentProcessor:
                     existing_metadata = []
                     existing_embeddings = None
             
-            # Prepare new metadata like in notebook
             published_date = datetime.datetime.utcnow().isoformat()
             doc_id = document_info["document_id"]
             
@@ -461,45 +427,38 @@ class DocumentProcessor:
                     "embedding": normalized_embeddings[i].tolist(),
                     "published_date": published_date,
                     "filename": filename,
-                    "document_id": doc_id,  # Keep for tracking but not used in search
+                    "document_id": doc_id,
                     "user_id": user_id,
                     "chunk_id": chunk["chunk_id"],
                     "chunk_index": i,
                     "url": f"document://{doc_id}"
                 })
             
-            # Combine existing and new metadata
             all_metadata = existing_metadata + new_metadata
             
-            # Combine existing and new embeddings
             if existing_embeddings is not None:
                 all_embeddings = np.vstack([existing_embeddings, normalized_embeddings])
             else:
                 all_embeddings = normalized_embeddings
             
-            # Ensure embeddings are float32 (FAISS requirement)
             all_embeddings = all_embeddings.astype(np.float32)
             
-            # Create new FAISS index with all embeddings
             if not FAISS_AVAILABLE:
                 raise Exception("FAISS not available. Install with: pip install faiss-cpu")
             
             dim = all_embeddings.shape[1]
-            index = faiss.IndexFlatIP(dim)  # Inner product for normalized vectors
+            index = faiss.IndexFlatIP(dim)
             index.add(all_embeddings)
             
-            # Save updated FAISS index and metadata
             faiss.write_index(index, index_file)
             with open(metadata_file, "wb") as f:
                 pickle.dump(all_metadata, f)
             
             logger.info(f"Updated shared storage: {len(new_metadata)} new chunks added. Total: {len(all_metadata)} chunks")
             
-            # Also store in MongoDB for compatibility
             from database.factory import get_db
             db = get_db()
             
-            # Store document metadata
             doc_data = {
                 "document_id": doc_id,
                 "filename": filename,
@@ -513,9 +472,8 @@ class DocumentProcessor:
             }
             await db.store_document(doc_data)
             
-            # Store individual chunks for search
             chunk_data = []
-            start_idx = len(existing_metadata)  # Start index for new chunks
+            start_idx = len(existing_metadata)
             for i, chunk in enumerate(chunks):
                 chunk_doc = {
                     "chunk_id": chunk["chunk_id"],
@@ -523,7 +481,7 @@ class DocumentProcessor:
                     "user_id": user_id,
                     "text": chunk["text"],
                     "embedding": normalized_embeddings[i].tolist(),
-                    "chunk_index": start_idx + i,  # Global chunk index in shared storage
+                    "chunk_index": start_idx + i,
                     "metadata": new_metadata[i]
                 }
                 chunk_data.append(chunk_doc)
@@ -560,13 +518,11 @@ class DocumentProcessor:
             List of search results with scores and metadata
         """
         try:
-            # Get user's vector storage directory
             vector_dir = f"vector_storage/{user_id}"
             if not os.path.exists(vector_dir):
                 logger.warning(f"No vector storage found for user {user_id}")
                 return []
             
-            # Shared files for all user documents
             index_file = os.path.join(vector_dir, "index.faiss")
             metadata_file = os.path.join(vector_dir, "metadata.pkl")
             
@@ -574,25 +530,20 @@ class DocumentProcessor:
                 logger.warning(f"No shared index files found for user {user_id}")
                 return []
             
-            # Generate query embedding
             from core.embedding_service import embedding_service
             query_embeddings = await embedding_service.generate_embeddings([query])
             query_embedding = np.array(query_embeddings[0])
             
-            # Normalize query embedding like in notebook
             query_norm = query_embedding / (np.linalg.norm(query_embedding) + 1e-9)
             query_norm = query_norm.reshape(1, -1)
             
             try:
-                # Load shared FAISS index and metadata
                 index = faiss.read_index(index_file)
                 with open(metadata_file, "rb") as f:
                     metadata = pickle.load(f)
                 
-                # Search across all user documents in shared index
                 D, I = index.search(query_norm, min(top_k, len(metadata)))
                 
-                # Collect results
                 results = []
                 
                 for distance, idx in zip(D[0], I[0]):
@@ -601,10 +552,9 @@ class DocumentProcessor:
                         results.append({
                             "score": similarity,
                             "metadata": metadata[idx],
-                            "document_id": metadata[idx]["document_id"]  # Keep for tracking
+                            "document_id": metadata[idx]["document_id"]
                         })
                 
-                # Sort by score (highest first)
                 results.sort(key=lambda x: x["score"], reverse=True)
                 logger.info(f"Found {len(results)} search results for query '{query}' for user {user_id}")
                 return results
@@ -617,5 +567,4 @@ class DocumentProcessor:
             logger.error(f"Error searching documents for user {user_id}: {str(e)}")
             return []
 
-# Create singleton instance
 document_processor = DocumentProcessor()

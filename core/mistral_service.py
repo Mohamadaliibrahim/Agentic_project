@@ -60,7 +60,6 @@ class MistralAIService:
             "Authorization": f"Bearer {self.api_key}"
         }
         
-        # Build messages with conversation history
         messages = [
             {
                 "role": "system",
@@ -68,12 +67,9 @@ class MistralAIService:
             }
         ]
         
-        # Add conversation history if available (limited to token budget)
         if conversation_history:
-            # Limit conversation history to fit within token budget
             limited_history = self.limit_conversation_history(conversation_history)
             
-            # Add the limited history to messages
             for msg in limited_history:
                 messages.append({
                     "role": "user",

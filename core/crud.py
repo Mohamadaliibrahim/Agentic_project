@@ -211,7 +211,6 @@ async def delete_chat_messages_by_chat_id(chat_id: str) -> int:
             count += 1
     return count
 
-# Statistics
 async def get_user_message_count(user_id: str) -> int:
     """Get the count of messages for a user"""
     db = get_db()
@@ -224,7 +223,7 @@ async def get_all_messages() -> List[ChatMessageResponse]:
     messages = []
     for message in message_list:
         messages.append(ChatMessageResponse(
-            message_id=message["message_id"],  # Already stored as sequential number
+            message_id=message["message_id"],
             user_id=message["user_id"],
             chat_id=message.get("chat_id", ""),
             date=message["date"],

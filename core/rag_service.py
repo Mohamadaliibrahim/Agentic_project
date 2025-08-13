@@ -4,7 +4,7 @@ Combines document retrieval with Mistral AI for context-aware responses
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from core.mistral_service import mistral_service
 from core.embedding_service import embedding_service
 from database.factory import get_db
@@ -35,7 +35,6 @@ class RAGService:
             Dictionary with answer and source chunks
         """
         try:
-            # Use the shared vector storage search directly 
             from core.document_processor import document_processor
             
             search_results = await document_processor.search_user_documents(
@@ -52,25 +51,22 @@ class RAGService:
                     "context_used": 0
                 }
             
-            # Convert search results to relevant chunks format
             relevant_chunks = []
             for result in search_results:
                 metadata = result["metadata"]
                 chunk_data = {
                     "text": metadata["content"],
-                    "document_id": metadata["document_id"],  # Keep for tracking
+                    "document_id": metadata["document_id"],
                     "chunk_id": metadata.get("chunk_id", ""),
-                    "chunk_index": metadata.get("chunk_index", 0),  # Add chunk_index
+                    "chunk_index": metadata.get("chunk_index", 0),
                     "filename": metadata["filename"],
                     "similarity_score": result["score"],
                     "published_date": metadata["published_date"]
                 }
                 relevant_chunks.append(chunk_data)
             
-            # Prepare context from chunks
             context = self._prepare_context(relevant_chunks)
             
-            # Generate RAG response
             answer = await self._generate_rag_response(query, context)
             
             response = {

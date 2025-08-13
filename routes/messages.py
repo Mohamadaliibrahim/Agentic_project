@@ -134,7 +134,6 @@ Instructions:
 
 Answer:"""
             
-            # Generate enhanced response using Mistral with conversation context
             from core.mistral_service import mistral_service
             enhanced_answer = await mistral_service.generate_response(
                 user_message=enhanced_prompt,
@@ -142,18 +141,14 @@ Answer:"""
                 conversation_history=conversation_history
             )
             
-            # Use enhanced answer if it's significantly different
             if len(enhanced_answer) > len(rag_result['answer']) * 0.8:
                 rag_result['answer'] = enhanced_answer
         
-        # Record answer received timestamp
         answer_received_timestamp = datetime.utcnow()
         
-        # Store this query and response in the messages table for conversation memory
         db = get_db()
         next_message_id = await db.get_next_message_id_for_chat(chat_id)
         
-        # Prepare source chunks information for storage
         source_info = ""
         sources_list = []
         if rag_result.get('source_chunks'):
@@ -164,7 +159,7 @@ Answer:"""
                     chunk=chunk.get('text_preview', chunk.get('text', ''))[:100] + "..." if len(chunk.get('text_preview', chunk.get('text', ''))) > 100 else chunk.get('text_preview', chunk.get('text', '')),
                     relevance_score=chunk.get('similarity_score', 0.0)
                 )
-                for chunk in rag_result['source_chunks'][:3]  # Limit to top 3 sources
+                for chunk in rag_result['source_chunks'][:3]
             ]
         
         message_data = {
@@ -174,15 +169,15 @@ Answer:"""
             "date": datetime.utcnow(),
             "user_message": request.query,
             "assistant_message": rag_result['answer'] + source_info,
-            "query_type": "document_query",  # Mark this as a document query
-            "source_chunks": rag_result.get('source_chunks', []),  # Store source chunks
+            "query_type": "document_query",
+            "source_chunks": rag_result.get('source_chunks', []),
             "message_sent_timestamp": message_sent_timestamp,
             "answer_received_timestamp": answer_received_timestamp
         }
         
         await db.create_message(message_data)
         
-        # Store or update chat collection item in dedicated table
+
         chat_collection_data = {
             "chat_id": chat_id,
             "user_id": request.user_id,
@@ -193,27 +188,23 @@ Answer:"""
             "query_type": "document_query"
         }
         
-        # Check if chat collection item already exists
         existing_collections = await db.get_chat_collections_by_user(request.user_id)
         existing_chat = next((c for c in existing_collections if c.get('chat_id') == chat_id), None)
         
         if existing_chat:
-            # Update existing chat collection item
             await db.update_chat_collection_item(chat_id, {
                 "last_message_date": datetime.utcnow(),
                 "message_count": next_message_id
             })
         else:
-            # Create new chat collection item
             await db.store_chat_collection_item(chat_collection_data)
         
-        # Create new response format with messages array
         messages = [
             ChatMessageItem(
                 content=request.query,
                 userType="user",
                 timestamp=message_sent_timestamp,
-                sources=[]  # User messages don't have sources
+                sources=[]
             ),
             ChatMessageItem(
                 content=rag_result['answer'],
@@ -245,10 +236,8 @@ async def get_chat_collection(user_id: str = Query(..., description="User ID to 
     try:
         db = get_db()
         
-        # Get chat collections from dedicated chat_collections table
         chats_data = await db.get_chat_collections_by_user(user_id)
         
-        # Convert to response format
         chat_items = []
         for chat_data in chats_data:
             chat_item = ChatCollectionItem(

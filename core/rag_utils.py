@@ -9,7 +9,6 @@ from typing import List, Tuple, Callable, Dict, Any
 import numpy as np
 import uuid
 
-# We'll create these paths correctly
 from database.factory import get_db
 
 try:
@@ -19,8 +18,6 @@ except ImportError:
         from langchain_text_splitters import RecursiveCharacterTextSplitter
     except ImportError:
         RecursiveCharacterTextSplitter = None
-
-# Import vector_db at the top level instead of through app.db
 import os
 import pickle
 import logging
@@ -51,7 +48,6 @@ class VectorDB:
         if not FAISS_AVAILABLE:
             raise RuntimeError("FAISS is not available. Install with: pip install faiss-cpu")
         
-        # Using IndexFlatL2 for exact L2 distance search
         index = faiss.IndexFlatL2(dim)
         logger.info(f"Created FAISS index with dimension {dim}")
         return index
@@ -114,10 +110,8 @@ class VectorDB:
             logger.error(f"Error deleting vector data for user {user_id}: {e}")
             return False
 
-# Global instance
 vector_db = VectorDB()
 
-# --- CRUD operations for chunks ---
 async def save_chunks(file_id: str, chunk_list: List[str]) -> bool:
     """
     Save chunks to the database
@@ -125,7 +119,6 @@ async def save_chunks(file_id: str, chunk_list: List[str]) -> bool:
     try:
         db = get_db()
         
-        # Prepare chunks with metadata
         chunks_with_metadata = []
         for i, chunk_text in enumerate(chunk_list):
             chunk_data = {
@@ -135,11 +128,10 @@ async def save_chunks(file_id: str, chunk_list: List[str]) -> bool:
                 "text": chunk_text,
                 "word_count": len(chunk_text.split()),
                 "character_count": len(chunk_text),
-                "embedding": None  # Will be set during embedding generation
+                "embedding": None
             }
             chunks_with_metadata.append(chunk_data)
         
-        # Save to database
         success = await db.store_document_chunks(chunks_with_metadata)
         
         if success:
@@ -168,7 +160,6 @@ async def get_chunks_by_file_id(file_id: str) -> List[Dict[str, Any]]:
         logger.error(f"Error retrieving chunks for file {file_id}: {e}")
         return []
 
-# --- Text chunking ---
 def chunk_text(text: str) -> List[str]:
     """
     Split text into overlapping chunks using RecursiveCharacterTextSplitter
@@ -180,30 +171,15 @@ def chunk_text(text: str) -> List[str]:
         List of text chunks
     """
     if not RecursiveCharacterTextSplitter:
-        # Fallback to manual chunking if langchain not available
-        return manual_chunk_text(text, chunk_size=500, overlap=50)
+        raise ImportError("RecursiveCharacterTextSplitter not available. Install langchain or langchain-text-splitters")
     
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,  # characters per chunk
+        chunk_size=500,
         chunk_overlap=50
     )
     chunks = splitter.split_text(text)
     return chunks
 
-def manual_chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-    """Manual chunking fallback"""
-    words = text.split()
-    chunks = []
-    i = 0
-    while i < len(words):
-        chunk = words[i:i + chunk_size]
-        chunks.append(" ".join(chunk))
-        i += chunk_size - overlap
-        if i >= len(words):
-            break
-    return chunks
-
-# --- Embedding wrapper ---
 def embed_texts(texts: List[str], embed_fn: Callable[[List[str]], List[List[float]]]) -> np.ndarray:
     """
     embed_fn should accept List[str] and return List[List[float]] (float vectors).
@@ -213,7 +189,6 @@ def embed_texts(texts: List[str], embed_fn: Callable[[List[str]], List[List[floa
     arr = np.asarray(vects, dtype=np.float32)
     return arr
 
-# --- Indexing & mapping ---
 def build_or_update_index(user_id: str, texts: List[str], embed_fn: Callable[[List[str]], List[List[float]]]):
     """
     Build or update FAISS index for a user with new texts
@@ -226,11 +201,9 @@ def build_or_update_index(user_id: str, texts: List[str], embed_fn: Callable[[Li
     Returns:
         Dict with indexing results
     """
-    # Compute embeddings
-    embeddings = embed_texts(texts, embed_fn)  # shape: (n, dim)
+    embeddings = embed_texts(texts, embed_fn)
     dim = embeddings.shape[1]
 
-    # try load existing index & mapping
     idx = None
     try:
         idx = vector_db.load_faiss_index(user_id)
@@ -240,13 +213,11 @@ def build_or_update_index(user_id: str, texts: List[str], embed_fn: Callable[[Li
     mapping = vector_db.load_mapping(user_id) or {}
 
     if idx is None:
-        # create and add
         try:
             idx = vector_db.create_faiss_index(dim)
         except Exception as e:
             raise RuntimeError("FAISS unavailable or failed to create index: " + str(e))
 
-    # add vectors and update mapping with generated ids
     start_id = len(mapping)
     ids = []
     for i, txt in enumerate(texts):
@@ -254,9 +225,7 @@ def build_or_update_index(user_id: str, texts: List[str], embed_fn: Callable[[Li
         mapping[new_id] = {"text": txt}
         ids.append(new_id)
 
-    # faiss expects numpy float32
     idx.add(embeddings)
-    # Save
     vector_db.save_faiss_index(idx, user_id)
     vector_db.save_mapping(mapping, user_id)
 
@@ -292,15 +261,12 @@ def search_index(user_id: str, query: str, embed_fn: Callable[[List[str]], List[
     
     results = []
     for score, idx_pos in zip(D[0], I[0]):
-        # We can't directly get id->mapping if we use IndexFlat; mapping ordering assumed preserved.
-        # Here we use naive approach: iterate mapping items in insertion order.
         keys = list(mapping.keys())
         if idx_pos < len(keys):
             key = keys[idx_pos]
             results.append((mapping[key]["text"], float(score)))
     return results
 
-# --- Integration functions ---
 async def process_and_index_document(file_id: str, text: str, user_id: str, embed_fn: Callable[[List[str]], List[List[float]]]) -> Dict[str, Any]:
     """
     Process a document: chunk it, save chunks, generate embeddings, and index
@@ -314,13 +280,10 @@ async def process_and_index_document(file_id: str, text: str, user_id: str, embe
     Returns:
         Processing results
     """
-    # 1. Chunk the text
     chunks = chunk_text(text)
     
-    # 2. Save chunks to database
     await save_chunks(file_id, chunks)
     
-    # 3. Build/update the vector index
     index_result = build_or_update_index(user_id, chunks, embed_fn)
     
     return {
@@ -342,7 +305,6 @@ async def query_user_documents(user_id: str, query: str, embed_fn: Callable[[Lis
     Returns:
         Query results with context
     """
-    # Search the index
     results = search_index(user_id, query, embed_fn, k)
     
     if not results:
@@ -352,7 +314,6 @@ async def query_user_documents(user_id: str, query: str, embed_fn: Callable[[Lis
             "context": "No relevant documents found."
         }
     
-    # Prepare context from results
     context_parts = []
     for i, (text, score) in enumerate(results):
         context_parts.append(f"[Result {i+1}, Score: {score:.3f}]\n{text}")

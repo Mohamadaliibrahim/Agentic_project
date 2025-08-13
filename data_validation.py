@@ -57,8 +57,6 @@ class DocumentQueryRequest(BaseModel):
     """Model for document query request - searches all user documents"""
     query: str
     user_id: str
-    # document_id removed - now searches across all user documents
-    # chat_id moved to query parameter
 
 class DocumentQueryResponse(BaseModel):
     """Model for document query response"""
@@ -66,19 +64,19 @@ class DocumentQueryResponse(BaseModel):
     source_chunks: list
     query: str
     context_used: int
-    chat_id: str  # Return chat_id for conversation tracking
-    message_id: str  # Return message_id for tracking
+    chat_id: str
+    message_id: str
 
 class SourceChunk(BaseModel):
     """Model for source chunk information in chat responses"""
-    document: str  # Filename or document identifier
-    chunk: str     # Preview of the relevant text chunk
-    relevance_score: float  # Similarity/relevance score
+    document: str
+    chunk: str
+    relevance_score: float
 
 class ChatMessageItem(BaseModel):
     """Model for individual chat message in new format"""
     content: str
-    userType: str  # "user" or "bot"
+    userType: str
     timestamp: datetime
     sources: Optional[List[SourceChunk]] = None
 
