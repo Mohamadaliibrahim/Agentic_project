@@ -94,25 +94,29 @@ class DatabaseInterface(ABC):
         """Get all messages from all users"""
         pass
 
-    # Document query storage methods
     @abstractmethod
-    async def store_document_query(self, query_data: Dict[str, Any]) -> str:
-        """Store a document query and its response"""
+    async def get_user_chats_collection(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all chats for a user with basic info for collection view"""
         pass
-    
+
     @abstractmethod
-    async def get_user_document_queries(self, user_id: str) -> List[Dict[str, Any]]:
-        """Get all document queries for a user"""
+    async def store_chat_collection_item(self, chat_data: Dict[str, Any]) -> str:
+        """Store chat collection item in dedicated table"""
         pass
-    
+
     @abstractmethod
-    async def get_document_queries_by_document(self, document_id: str) -> List[Dict[str, Any]]:
-        """Get all queries for a specific document"""
+    async def update_chat_collection_item(self, chat_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update chat collection item"""
         pass
-    
+
     @abstractmethod
-    async def delete_document_query(self, query_id: str) -> bool:
-        """Delete a document query"""
+    async def get_chat_collections_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all chat collections for a user from dedicated table"""
+        pass
+
+    @abstractmethod
+    async def delete_chat_collection_item(self, chat_id: str) -> bool:
+        """Delete chat collection item"""
         pass
 
     # Document storage methods

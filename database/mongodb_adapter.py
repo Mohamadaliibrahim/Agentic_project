@@ -59,14 +59,13 @@ class MongoDBAdapter(DatabaseInterface):
         await self.database.document_chunks.create_index("user_id")
         await self.database.document_chunks.create_index("chunk_id", unique=True)
         
-        # Document queries indexes
-        await self.database.document_queries.create_index("query_id", unique=True)
-        await self.database.document_queries.create_index("user_id")
-        await self.database.document_queries.create_index("document_id")
-        await self.database.document_queries.create_index("query_date")
-        
         await self.database.chat_messages.create_index("chat_id")  # Index for page-based conversations
         await self.database.chat_messages.create_index("date")
+        
+        # Chat collections indexes
+        await self.database.chat_collections.create_index("chat_id", unique=True)
+        await self.database.chat_collections.create_index("user_id")
+        await self.database.chat_collections.create_index("creation_date")
         
         print("Database indexes created for pure JSON storage")
     
@@ -239,6 +238,67 @@ class MongoDBAdapter(DatabaseInterface):
             messages.append(self._from_json_document(doc))
         return messages
 
+    async def get_user_chats_collection(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all chats for a user with basic info for collection view"""
+        pipeline = [
+            {"$match": {"user_id": user_id}},
+            {"$sort": {"date": 1}},  # Sort by date to get first message
+            {"$group": {
+                "_id": "$chat_id",
+                "chat_id": {"$first": "$chat_id"},
+                "first_message": {"$first": "$user_message"},
+                "creation_date": {"$first": "$date"}
+            }},
+            {"$sort": {"creation_date": -1}}  # Sort chats by newest first
+        ]
+        
+        chats = []
+        cursor = self.database.chat_messages.aggregate(pipeline)
+        async for doc in cursor:
+            chats.append({
+                "chat_id": doc["chat_id"],
+                "first_message": doc["first_message"],
+                "creation_date": doc["creation_date"]
+            })
+        return chats
+
+    async def store_chat_collection_item(self, chat_data: Dict[str, Any]) -> str:
+        """Store chat collection item in dedicated chat_collections table"""
+        doc_json = self._to_json_document(chat_data, "chat_collection")
+        await self.database.chat_collections.insert_one(doc_json)
+        return chat_data["chat_id"]
+
+    async def update_chat_collection_item(self, chat_id: str, update_data: Dict[str, Any]) -> bool:
+        """Update chat collection item in chat_collections table"""
+        try:
+            # Remove any None values and prepare update document
+            update_doc = {k: v for k, v in update_data.items() if v is not None}
+            if not update_doc:
+                return False
+            
+            result = await self.database.chat_collections.update_one(
+                {"chat_id": chat_id},
+                {"$set": update_doc}
+            )
+            return result.modified_count > 0
+        except Exception:
+            return False
+
+    async def get_chat_collections_by_user(self, user_id: str) -> List[Dict[str, Any]]:
+        """Get all chat collections for a user from dedicated chat_collections table"""
+        collections = []
+        async for doc in self.database.chat_collections.find({"user_id": user_id}).sort("creation_date", -1):
+            collections.append(self._from_json_document(doc))
+        return collections
+
+    async def delete_chat_collection_item(self, chat_id: str) -> bool:
+        """Delete chat collection item from chat_collections table"""
+        try:
+            result = await self.database.chat_collections.delete_one({"chat_id": chat_id})
+            return result.deleted_count > 0
+        except Exception:
+            return False
+
     # Document storage methods
     async def store_document(self, document_data: Dict[str, Any]) -> str:
         """Store document metadata in documents table"""
@@ -281,35 +341,6 @@ class MongoDBAdapter(DatabaseInterface):
             await self.database.document_chunks.delete_many({"document_id": document_id})
             # Delete document metadata
             result = await self.database.documents.delete_one({"document_id": document_id})
-            return result.deleted_count > 0
-        except Exception:
-            return False
-
-    # Document query storage methods
-    async def store_document_query(self, query_data: Dict[str, Any]) -> str:
-        """Store a document query and its response"""
-        doc = self._to_json_document(query_data, "document_query")
-        await self.database.document_queries.insert_one(doc)
-        return query_data["query_id"]
-    
-    async def get_user_document_queries(self, user_id: str) -> List[Dict[str, Any]]:
-        """Get all document queries for a user"""
-        queries = []
-        async for query in self.database.document_queries.find({"user_id": user_id}).sort("query_date", -1):
-            queries.append(self._from_json_document(query))
-        return queries
-    
-    async def get_document_queries_by_document(self, document_id: str) -> List[Dict[str, Any]]:
-        """Get all queries for a specific document"""
-        queries = []
-        async for query in self.database.document_queries.find({"document_id": document_id}).sort("query_date", -1):
-            queries.append(self._from_json_document(query))
-        return queries
-    
-    async def delete_document_query(self, query_id: str) -> bool:
-        """Delete a document query"""
-        try:
-            result = await self.database.document_queries.delete_one({"query_id": query_id})
             return result.deleted_count > 0
         except Exception:
             return False

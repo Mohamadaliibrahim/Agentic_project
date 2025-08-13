@@ -396,7 +396,7 @@ class DocumentProcessor:
             embeddings = await embedding_service.generate_embeddings(chunk_texts)
             
             # Convert embeddings to numpy array and normalize like in notebook
-            embeddings_array = np.array(embeddings)
+            embeddings_array = np.array(embeddings, dtype=np.float32)
             norms = np.linalg.norm(embeddings_array, axis=1, keepdims=True)
             norms[norms == 0] = 1e-9
             normalized_embeddings = embeddings_array / norms
@@ -422,11 +422,29 @@ class DocumentProcessor:
                     # Load existing FAISS index
                     existing_index = faiss.read_index(index_file)
                     
-                    # Extract existing embeddings
-                    existing_embeddings = np.zeros((existing_index.ntotal, existing_index.d))
-                    existing_index.reconstruct_n(0, existing_index.ntotal, existing_embeddings)
+                    # Check if the index has data and is compatible
+                    if existing_index.ntotal > 0:
+                        # Extract existing embeddings with proper type handling
+                        existing_embeddings = np.zeros((existing_index.ntotal, existing_index.d), dtype=np.float32)
+                        
+                        try:
+                            existing_index.reconstruct_n(0, existing_index.ntotal, existing_embeddings)
+                            logger.info(f"Loaded existing {len(existing_metadata)} chunks for user {user_id}")
+                        except Exception as reconstruct_error:
+                            logger.warning(f"Could not reconstruct embeddings from existing index: {reconstruct_error}. Will rebuild index.")
+                            # Try to get embeddings from metadata instead
+                            if existing_metadata and all('embedding' in meta for meta in existing_metadata):
+                                existing_embeddings = np.array([meta['embedding'] for meta in existing_metadata], dtype=np.float32)
+                                logger.info(f"Recovered embeddings from metadata for {len(existing_metadata)} chunks")
+                            else:
+                                logger.warning("No embeddings available in metadata. Creating new index.")
+                                existing_metadata = []
+                                existing_embeddings = None
+                    else:
+                        logger.info("Existing index is empty. Starting fresh.")
+                        existing_metadata = []
+                        existing_embeddings = None
                     
-                    logger.info(f"Loaded existing {len(existing_metadata)} chunks for user {user_id}")
                 except Exception as e:
                     logger.warning(f"Could not load existing data: {e}. Creating new index.")
                     existing_metadata = []
@@ -458,6 +476,9 @@ class DocumentProcessor:
                 all_embeddings = np.vstack([existing_embeddings, normalized_embeddings])
             else:
                 all_embeddings = normalized_embeddings
+            
+            # Ensure embeddings are float32 (FAISS requirement)
+            all_embeddings = all_embeddings.astype(np.float32)
             
             # Create new FAISS index with all embeddings
             if not FAISS_AVAILABLE:

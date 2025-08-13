@@ -4,7 +4,7 @@ This module contains all Pydantic models for request/response validation
 """
 
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class UserCreate(BaseModel):
@@ -69,7 +69,29 @@ class DocumentQueryResponse(BaseModel):
     chat_id: str  # Return chat_id for conversation tracking
     message_id: str  # Return message_id for tracking
 
-class ChatRequest(BaseModel):
-    """Model for sending a chat message"""
-    message: str
-    user_id: str
+class SourceChunk(BaseModel):
+    """Model for source chunk information in chat responses"""
+    document: str  # Filename or document identifier
+    chunk: str     # Preview of the relevant text chunk
+    relevance_score: float  # Similarity/relevance score
+
+class ChatMessageItem(BaseModel):
+    """Model for individual chat message in new format"""
+    content: str
+    userType: str  # "user" or "bot"
+    timestamp: datetime
+    sources: Optional[List[SourceChunk]] = None
+
+class ChatMessagesResponse(BaseModel):
+    """Model for chat messages response in new format"""
+    messages: list[ChatMessageItem]
+
+class ChatCollectionItem(BaseModel):
+    """Model for individual chat in collection"""
+    chatId: str
+    chatTitle: str
+    creation: datetime
+
+class ChatCollectionResponse(BaseModel):
+    """Model for chat collection response"""
+    chats: list[ChatCollectionItem]

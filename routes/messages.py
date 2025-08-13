@@ -7,15 +7,18 @@ from fastapi import APIRouter, HTTPException, status, Query, Path
 from typing import List, Optional
 from core import crud
 from data_validation import (
-    ChatMessageResponse, ChatMessageUpdate, ChatRequest, ChatResponse
+    ChatMessageResponse, ChatMessageUpdate, ChatRequest, ChatResponse,
+    DocumentQueryRequest, DocumentQueryResponse, ChatCollectionResponse, ChatCollectionItem,
+    ChatMessageItem, ChatMessagesResponse, SourceChunk
 )
+from database.factory import get_db
 from pymongo.errors import PyMongoError, DuplicateKeyError, ServerSelectionTimeoutError
 from bson.errors import InvalidId
 from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/messages", tags=["Messages"])
+router = APIRouter(prefix="/chat/message", tags=["Messages"])
 
 def handle_database_exceptions(e: Exception, operation: str = "operation"):
     """
@@ -56,156 +59,215 @@ def handle_database_exceptions(e: Exception, operation: str = "operation"):
 
 # Original API endpoints
 
-@router.post("/chat", tags=["Messages"])
-async def chat_endpoint(
-    chat_request: ChatRequest, 
+@router.post("", response_model=ChatMessagesResponse, tags=["Messages"])
+async def chat_message(
+    request: DocumentQueryRequest,
     chat_id: Optional[str] = Query(None, description="Optional chat ID for continuing existing conversations")
-) -> ChatResponse:
-    """ 
-    Enhanced chat endpoint with RAG integration and conversation memory
+):
+    """
+    Query documents with RAG and conversation memory
     
-    This endpoint:
-    1. First tries to find relevant documents using RAG
-    2. If documents found, uses RAG + conversation memory for response
-    3. If no documents found, uses regular chat with conversation memory
-    4. Stores all conversations in the same table with proper metadata
-    5. Maintains conversation memory across both chat and document queries
+    This endpoint allows users to ask questions about their uploaded documents.
+    It supports conversation memory by tracking chat_id, so users can ask
+    follow-up questions and reference previous parts of the conversation.
+    
+    Returns messages in new format with timestamps for tracking LLM response times.
+    
+    Example conversation:
+    1. "What is machine learning?" -> Returns answer with new chat_id
+    2. "How is it different from AI?" -> Uses same chat_id, references previous Q&A
+    3. "What was my first question?" -> Can answer "What is machine learning?"
     """
     try:
-        user = await crud.get_user(chat_request.user_id)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"User with ID {chat_request.user_id} not found"
-            )
-        
-        from database.factory import get_db
         from core.rag_service import rag_service
-        from core.mistral_service import mistral_service
+        from core import crud
         import uuid
+        from datetime import datetime
+        
+        # Record message sending timestamp
+        message_sent_timestamp = datetime.utcnow()
         
         # Generate chat_id if not provided (new conversation)
         chat_id = chat_id if chat_id else str(uuid.uuid4())
         
-        db = get_db()
-        
         # Get conversation history for this chat to provide context
         conversation_history = []
         if chat_id:  # If existing chat, get previous messages
-            conversation_history = await db.get_messages_by_chat_id(chat_id)
+            db = get_db()
+            previous_messages = await db.get_messages_by_chat_id(chat_id)
+            conversation_history = previous_messages
         
-        # Try to query user documents first (RAG functionality)
-        rag_result = None
-        try:
-            rag_result = await rag_service.query_documents(
-                query=chat_request.message,
-                user_id=chat_request.user_id  # Removed document_id - searches all user documents
-            )
-        except Exception as e:
-            logger.warning(f"RAG query failed, falling back to regular chat: {str(e)}")
+        # Query documents using RAG - searches across all user documents
+        rag_result = await rag_service.query_documents(
+            query=request.query,
+            user_id=request.user_id  # Removed document_id - searches all user documents
+        )
         
-        assistant_message = ""
-        query_type = "chat"
-        source_chunks = []
-        
-        if rag_result and rag_result.get('context_used', 0) > 0:
-            # We have document context - use RAG with conversation memory
-            query_type = "chat_with_rag"
-            source_chunks = rag_result.get('source_chunks', [])
-            
-            # Build conversation context
+        # Enhance the RAG response with conversation context if available
+        if conversation_history:
+            # Build conversation context for the AI
             context_messages = []
-            if conversation_history:
-                for msg in conversation_history[-5:]:  # Last 5 exchanges for context
-                    context_messages.append(f"Previous Q: {msg.get('user_message', '')}")
-                    context_messages.append(f"Previous A: {msg.get('assistant_message', '')}")
+            for msg in conversation_history[-5:]:  # Last 5 exchanges for context
+                context_messages.append(f"Previous Q: {msg.get('user_message', '')}")
+                context_messages.append(f"Previous A: {msg.get('assistant_message', '')}")
             
-            conversation_context = "\n".join(context_messages) if context_messages else "No previous conversation."
+            conversation_context = "\n".join(context_messages)
             
-            # Enhanced prompt for RAG with conversation context
-            enhanced_prompt = f"""You are a helpful AI assistant that answers questions based on provided document context and conversation history.
+            # Enhanced prompt that includes conversation history
+            enhanced_prompt = f"""You are answering questions about documents. Use the conversation history to provide contextually relevant responses.
 
 Conversation History:
 {conversation_context}
 
 Document Context:
 {rag_result.get('context_used', 0)} relevant document chunks found.
+
+Current Question: {request.query}
+
 Document Information: {rag_result['answer']}
 
-Current Question: {chat_request.message}
-
 Instructions:
-- Use both the document context and conversation history to answer
+- Answer the current question using both the document context and conversation history
 - If the user asks about previous questions or answers, reference the conversation history
-- If asking about relationships between current and previous topics, explain connections
-- Be contextual and helpful
-- If the current question is about something in the conversation history, prioritize that information
+- If asking about relationships between current and previous topics, explain the connections
+- Be specific and helpful
 
 Answer:"""
             
-            # Generate enhanced response using Mistral with full context
-            assistant_message = await mistral_service.generate_response(
+            # Generate enhanced response using Mistral with conversation context
+            from core.mistral_service import mistral_service
+            enhanced_answer = await mistral_service.generate_response(
                 user_message=enhanced_prompt,
-                user_id=chat_request.user_id,
+                user_id=request.user_id,
                 conversation_history=conversation_history
             )
             
-            # If enhanced answer is not significantly better, use original RAG answer
-            if len(assistant_message.strip()) < 10:
-                assistant_message = rag_result['answer']
+            # Use enhanced answer if it's significantly different
+            if len(enhanced_answer) > len(rag_result['answer']) * 0.8:
+                rag_result['answer'] = enhanced_answer
         
-        else:
-            # No document context - use regular chat with conversation memory
-            query_type = "chat"
-            assistant_message = await mistral_service.generate_response(
-                user_message=chat_request.message,
-                user_id=chat_request.user_id,
-                conversation_history=conversation_history
-            )
+        # Record answer received timestamp
+        answer_received_timestamp = datetime.utcnow()
         
-        # Get the next sequential message ID for this chat
+        # Store this query and response in the messages table for conversation memory
+        db = get_db()
         next_message_id = await db.get_next_message_id_for_chat(chat_id)
         
-        # Store the conversation in database with metadata
+        # Prepare source chunks information for storage
+        source_info = ""
+        sources_list = []
+        if rag_result.get('source_chunks'):
+            source_info = f" [Sources: {len(rag_result['source_chunks'])} document chunks]"
+            sources_list = [
+                SourceChunk(
+                    document=chunk.get('filename', 'unknown'),
+                    chunk=chunk.get('text_preview', chunk.get('text', ''))[:100] + "..." if len(chunk.get('text_preview', chunk.get('text', ''))) > 100 else chunk.get('text_preview', chunk.get('text', '')),
+                    relevance_score=chunk.get('similarity_score', 0.0)
+                )
+                for chunk in rag_result['source_chunks'][:3]  # Limit to top 3 sources
+            ]
+        
         message_data = {
             "message_id": str(next_message_id),
-            "user_id": chat_request.user_id,
+            "user_id": request.user_id,
             "chat_id": chat_id,
             "date": datetime.utcnow(),
-            "user_message": chat_request.message,
-            "assistant_message": assistant_message,
-            "query_type": query_type,  # Mark the type of query
+            "user_message": request.query,
+            "assistant_message": rag_result['answer'] + source_info,
+            "query_type": "document_query",  # Mark this as a document query
+            "source_chunks": rag_result.get('source_chunks', []),  # Store source chunks
+            "message_sent_timestamp": message_sent_timestamp,
+            "answer_received_timestamp": answer_received_timestamp
         }
-        
-        # Add source chunks if we have them from RAG
-        if source_chunks:
-            message_data["source_chunks"] = source_chunks
         
         await db.create_message(message_data)
         
-        return ChatResponse(
-            user_message=chat_request.message,
-            bot_response=assistant_message,
-            message_id=str(next_message_id),
-            chat_id=chat_id,
-            timestamp=datetime.utcnow()
-        )
+        # Store or update chat collection item in dedicated table
+        chat_collection_data = {
+            "chat_id": chat_id,
+            "user_id": request.user_id,
+            "chat_title": request.query[:50] + ("..." if len(request.query) > 50 else ""),
+            "creation_date": datetime.utcnow(),
+            "last_message_date": datetime.utcnow(),
+            "message_count": next_message_id,
+            "query_type": "document_query"
+        }
         
-    except ValueError as e:
-        if "does not exist" in str(e):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(e)
-            )
+        # Check if chat collection item already exists
+        existing_collections = await db.get_chat_collections_by_user(request.user_id)
+        existing_chat = next((c for c in existing_collections if c.get('chat_id') == chat_id), None)
+        
+        if existing_chat:
+            # Update existing chat collection item
+            await db.update_chat_collection_item(chat_id, {
+                "last_message_date": datetime.utcnow(),
+                "message_count": next_message_id
+            })
         else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid data provided: {str(e)}"
+            # Create new chat collection item
+            await db.store_chat_collection_item(chat_collection_data)
+        
+        # Create new response format with messages array
+        messages = [
+            ChatMessageItem(
+                content=request.query,
+                userType="user",
+                timestamp=message_sent_timestamp,
+                sources=[]  # User messages don't have sources
+            ),
+            ChatMessageItem(
+                content=rag_result['answer'],
+                userType="bot",
+                timestamp=answer_received_timestamp,
+                sources=sources_list
             )
+        ]
+        
+        return ChatMessagesResponse(messages=messages)
+        
     except Exception as e:
-        handle_database_exceptions(e, "processing your message")
+        logger.error(f"Error in document query: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to query documents: {str(e)}"
+        )
 
-@router.get("/users/{user_id}/messages", response_model=List[ChatMessageResponse], tags=["Messages"])
+@router.get("/collection", response_model=ChatCollectionResponse, tags=["Messages"])
+async def get_chat_collection(user_id: str = Query(..., description="User ID to get chats for")):
+    """
+    Get all chats for a given user
+    
+    Returns a list of chat objects containing:
+    - chatId: Unique chat identifier
+    - chatTitle: Title/first message of the chat
+    - creation: Chat creation timestamp
+    """
+    try:
+        db = get_db()
+        
+        # Get chat collections from dedicated chat_collections table
+        chats_data = await db.get_chat_collections_by_user(user_id)
+        
+        # Convert to response format
+        chat_items = []
+        for chat_data in chats_data:
+            chat_item = ChatCollectionItem(
+                chatId=chat_data['chat_id'],
+                chatTitle=chat_data['chat_title'],
+                creation=chat_data['creation_date']
+            )
+            chat_items.append(chat_item)
+        
+        return ChatCollectionResponse(chats=chat_items)
+        
+    except Exception as e:
+        logger.error(f"Error getting chat collection for user {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get chat collection: {str(e)}"
+        )
+
+@router.get("/users/{user_id}", response_model=List[ChatMessageResponse], tags=["Messages"])
 async def get_user_messages(user_id: str):
     """ Get all chat messages for a specific user """
     user = await crud.get_user(user_id)
@@ -221,7 +283,7 @@ async def get_user_messages(user_id: str):
     except Exception as e:
         handle_database_exceptions(e, "retrieving messages")
 
-@router.get("/chat/{chat_id}/messages", response_model=List[ChatMessageResponse], tags=["Messages"])
+@router.get("/chat/{chat_id}", response_model=List[ChatMessageResponse], tags=["Messages"])
 async def get_chat_messages(chat_id: str):
     """ Get all messages for a specific chat ID (page) """
     try:
@@ -230,7 +292,7 @@ async def get_chat_messages(chat_id: str):
     except Exception as e:
         handle_database_exceptions(e, "retrieving chat messages")
 
-@router.get("/messages/{message_id}", response_model=ChatMessageResponse, tags=["Messages"])
+@router.get("/{message_id}", response_model=ChatMessageResponse, tags=["Messages"])
 async def get_message(message_id: str):
     """ Get a specific message by ID """
     try:
@@ -249,7 +311,7 @@ async def get_message(message_id: str):
     except Exception as e:
         handle_database_exceptions(e, "retrieving message")
 
-@router.put("/messages/{message_id}", response_model=ChatMessageResponse, tags=["Messages"])
+@router.put("/{message_id}", response_model=ChatMessageResponse, tags=["Messages"])
 async def update_message(message_id: str, update_data: ChatMessageUpdate):
     """ Update a specific message """
     try:
@@ -275,7 +337,7 @@ async def update_message(message_id: str, update_data: ChatMessageUpdate):
     except Exception as e:
         handle_database_exceptions(e, "updating message")
 
-@router.delete("/messages/{message_id}", tags=["Messages"])
+@router.delete("/{message_id}", tags=["Messages"])
 async def delete_message(message_id: str):
     """ Delete a specific message """
     try:
@@ -301,7 +363,7 @@ async def delete_message(message_id: str):
     except Exception as e:
         handle_database_exceptions(e, "deleting message")
 
-@router.delete("/users/{user_id}/messages", tags=["Messages"])
+@router.delete("/users/{user_id}", tags=["Messages"])
 async def delete_user_messages(user_id: str):
     """ Delete all messages for a specific user """
     user = await crud.get_user(user_id)
@@ -320,7 +382,7 @@ async def delete_user_messages(user_id: str):
     except Exception as e:
         handle_database_exceptions(e, "deleting user messages")
 
-@router.delete("/chat/{chat_id}/messages", tags=["Messages"])
+@router.delete("/chat/{chat_id}", tags=["Messages"])
 async def delete_chat_messages(chat_id: str):
     """ Delete all messages for a specific chat ID (page) """
     try:
