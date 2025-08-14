@@ -75,7 +75,8 @@ async def upload_document(
         document_result = await document_processor.process_and_store_document(
             file_content=file_content,
             filename=file.filename,
-            user_id=user_id
+            user_id=user_id,
+            file_size=file_size
         )
         
         return DocumentUploadResponse(
@@ -107,8 +108,8 @@ async def get_user_documents(user_id: str = Query(...)):
                 filename=doc["filename"],
                 file_type=doc["file_type"],
                 total_chunks=doc["total_chunks"],
-                upload_date=doc["upload_date"],
-                file_size=doc["file_size"]
+                upload_date=doc["upload_date"].isoformat() if hasattr(doc["upload_date"], 'isoformat') else str(doc["upload_date"]),
+                file_size=doc.get("file_size", 0)  # Default to 0 if file_size is missing
             )
             for doc in documents
         ]
@@ -137,8 +138,8 @@ async def get_document_info(document_id: str):
             filename=document["filename"],
             file_type=document["file_type"],
             total_chunks=document["total_chunks"],
-            upload_date=document["upload_date"],
-            file_size=document["file_size"]
+            upload_date=document["upload_date"].isoformat() if hasattr(document["upload_date"], 'isoformat') else str(document["upload_date"]),
+            file_size=document.get("file_size", 0)  # Default to 0 if file_size is missing
         )
         
     except HTTPException:

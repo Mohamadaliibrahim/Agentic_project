@@ -93,3 +93,7 @@ class ChatCollectionItem(BaseModel):
 class ChatCollectionResponse(BaseModel):
     """Model for chat collection response"""
     chats: list[ChatCollectionItem]
+
+class ChatTitleUpdate(BaseModel):
+    """Model for updating chat title"""
+    title: str

@@ -7,7 +7,7 @@ class Settings:
     """Application settings"""
     
     HOST: str = "127.0.0.1"
-    PORT: int = 8000
+    PORT: int = 8010
     RELOAD: bool = True
     LOG_LEVEL: str = "info"
     

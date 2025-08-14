@@ -9,7 +9,7 @@ from core import crud
 from data_validation import (
     ChatMessageResponse, ChatMessageUpdate, ChatRequest, ChatResponse,
     DocumentQueryRequest, DocumentQueryResponse, ChatCollectionResponse, ChatCollectionItem,
-    ChatMessageItem, ChatMessagesResponse, SourceChunk
+    ChatMessageItem, ChatMessagesResponse, SourceChunk, ChatTitleUpdate
 )
 from database.factory import get_db
 from pymongo.errors import PyMongoError, DuplicateKeyError, ServerSelectionTimeoutError
@@ -382,3 +382,32 @@ async def delete_chat_messages(chat_id: str):
         }
     except Exception as e:
         handle_database_exceptions(e, "deleting chat messages")
+
+@router.put("/chat/{chat_id}/title", tags=["Messages"])
+async def update_chat_title(chat_id: str, title_update: ChatTitleUpdate):
+    """ Update the title of a chat """
+    try:
+        db = get_db()
+        
+        # Update the chat title in the chat_collections
+        result = await db.update_chat_collection_item(chat_id, {
+            "chat_title": title_update.title
+        })
+        
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Chat with ID {chat_id} not found"
+            )
+        
+        return {
+            "message": "Chat title updated successfully",
+            "chat_id": chat_id,
+            "new_title": title_update.title
+        }
+    except HTTPException:
+        # Re-raise HTTPExceptions as they are
+        raise
+    except Exception as e:
+        logger.error(f"Error updating chat title: {str(e)}")
+        handle_database_exceptions(e, "updating chat title")

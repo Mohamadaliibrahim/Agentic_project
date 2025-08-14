@@ -1,4 +1,116 @@
+# Environment variables and secrets
 .env
+.env.local
+.env.development
+.env.production
+.env.test
+*.env
+config.ini
+secrets.json
+credentials.json
+
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 myenv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# API Keys and tokens
+*.key
+*.pem
+*.p12
+*.pfx
+api_keys.txt
+token.txt
+access_token.txt
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+database.db
+
+# Logs
+*.log
+logs/
+log/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker
+.dockerignore
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Vector storage and data files (potentially sensitive)
+vector_storage/
+data/
+uploads/
+documents/
+
+# Backup files
+*.bak
+*.backup
+
+# Local configuration files
+local_config.py
+local_settings.py
+
+# MongoDB dumps
+*.bson
+dump/
 
