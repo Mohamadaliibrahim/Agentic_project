@@ -192,20 +192,30 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def update_message(self, message_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a message in chat_messages table with pure JSON data"""
+        print(f"DB DEBUG: Looking for message_id: {message_id}")
         doc = await self.database.chat_messages.find_one({"message_id": message_id})
         if not doc:
+            print(f"DB DEBUG: No document found for message_id: {message_id}")
             return None
         
+        print(f"DB DEBUG: Found document: {doc}")
         current_data = self._from_json_document(doc)
+        print(f"DB DEBUG: Current data after conversion: {current_data}")
+        
         current_data.update(update_data)
+        print(f"DB DEBUG: Data after update: {current_data}")
         
         result = await self.database.chat_messages.update_one(
             {"message_id": message_id},
             {"$set": current_data}
         )
         
+        print(f"DB DEBUG: Update result - matched: {result.matched_count}, modified: {result.modified_count}")
+        
         if result.modified_count > 0:
+            print(f"DB DEBUG: Returning updated data: {current_data}")
             return current_data
+        print("DB DEBUG: No documents were modified")
         return None
     
     async def delete_message(self, message_id: str) -> bool:

@@ -165,21 +165,38 @@ async def get_chat_messages_by_chat_id(chat_id: str) -> List[ChatMessageResponse
         ))
     return messages
 
-async def update_chat_message(message_id: str, update_data: dict) -> Optional[ChatMessageResponse]:
+async def update_chat_message(message_id: str, update_data) -> Optional[ChatMessageResponse]:
     """Update a chat message"""
     db = get_db()
+    
+    print(f"DEBUG: Updating message_id: {message_id}")
+    print(f"DEBUG: Update data: {update_data}")
     
     # Get the current message
     current_message = await db.get_message(message_id)
     if not current_message:
+        print(f"DEBUG: Message not found for id: {message_id}")
         return None
     
+    print(f"DEBUG: Current message found: {current_message}")
+    
+    # Convert Pydantic model to dict if needed
+    if hasattr(update_data, 'dict'):
+        update_dict = update_data.dict(exclude_unset=True)
+    else:
+        update_dict = update_data
+    
+    print(f"DEBUG: Update dict: {update_dict}")
+    
     # Update with new data
-    updated_data = {**current_message, **update_data}
+    updated_data = {**current_message, **update_dict}
+    print(f"DEBUG: Final update data: {updated_data}")
+    
     updated_message = await db.update_message(message_id, updated_data)
+    print(f"DEBUG: Database update result: {updated_message}")
     
     if updated_message:
-        return ChatMessageResponse(
+        result = ChatMessageResponse(
             message_id=updated_message["message_id"],  # Already stored as sequential number
             user_id=updated_message["user_id"],
             chat_id=updated_message.get("chat_id", ""),
@@ -187,6 +204,10 @@ async def update_chat_message(message_id: str, update_data: dict) -> Optional[Ch
             user_message=updated_message["user_message"],
             assistant_message=updated_message["assistant_message"]
         )
+        print(f"DEBUG: Returning result: {result}")
+        return result
+    
+    print("DEBUG: No updated message returned from database")
     return None
 
 async def delete_chat_message(message_id: str) -> bool:

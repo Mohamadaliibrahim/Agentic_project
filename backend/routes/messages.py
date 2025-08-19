@@ -304,27 +304,112 @@ async def get_message(message_id: str):
 async def update_message(message_id: str, update_data: ChatMessageUpdate):
     """ Update a specific message """
     try:
+        logger.info(f"Updating message {message_id} with data: {update_data}")
+        
         message = await crud.get_chat_message(message_id)
         if not message:
+            logger.warning(f"Message not found: {message_id}")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Message not found"
             )
         
+        logger.info(f"Found message: {message}")
+        
         updated_message = await crud.update_chat_message(message_id, update_data)
         if not updated_message:
+            logger.error(f"Failed to update message {message_id}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to update message"
             )
+        
+        logger.info(f"Successfully updated message: {updated_message}")
         return updated_message
     except ValueError as e:
+        logger.error(f"ValueError updating message {message_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid data: {str(e)}"
         )
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Unexpected error updating message {message_id}: {str(e)}", exc_info=True)
         handle_database_exceptions(e, "updating message")
+
+@router.put("/{message_id}/regenerate", response_model=ChatMessageResponse, tags=["Messages"])
+async def update_message_and_regenerate(message_id: str, update_data: ChatMessageUpdate):
+    """ Update a message and regenerate the AI response """
+    try:
+        logger.info(f"Updating message {message_id} and regenerating response with data: {update_data}")
+        
+        # Get the current message
+        message = await crud.get_chat_message(message_id)
+        if not message:
+            logger.warning(f"Message not found: {message_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Message not found"
+            )
+        
+        # Update the user message part
+        updated_message = await crud.update_chat_message(message_id, update_data)
+        if not updated_message:
+            logger.error(f"Failed to update message {message_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update message"
+            )
+        
+        # Now regenerate AI response for the updated message
+        # Get conversation history (all messages before this one in the same chat)
+        from core.mistral_service import mistral_service
+        from database.factory import get_db
+        
+        db = get_db()
+        chat_messages = await db.get_messages_by_chat_id(updated_message.chat_id)
+        
+        # Filter messages that come before the current message (by message_id)
+        conversation_history = []
+        current_msg_id = int(message_id)
+        
+        for msg in chat_messages:
+            if int(msg["message_id"]) < current_msg_id:
+                conversation_history.append(msg)
+        
+        # Generate new AI response
+        new_ai_response = await mistral_service.generate_response(
+            user_message=update_data.user_message,
+            user_id=updated_message.user_id,
+            conversation_history=conversation_history
+        )
+        
+        # Update the message with the new AI response
+        final_update = {"assistant_message": new_ai_response}
+        final_message = await crud.update_chat_message(message_id, final_update)
+        
+        if not final_message:
+            logger.error(f"Failed to update AI response for message {message_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update AI response"
+            )
+        
+        logger.info(f"Successfully updated message and regenerated response: {final_message}")
+        return final_message
+        
+    except ValueError as e:
+        logger.error(f"ValueError updating message {message_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid data: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error updating message {message_id}: {str(e)}", exc_info=True)
+        handle_database_exceptions(e, "updating message with regeneration")
 
 @router.delete("/{message_id}", tags=["Messages"])
 async def delete_message(message_id: str):

@@ -100,12 +100,16 @@ class APIClient:
         # Transform ChatMessageResponse format to frontend format
         transformed_messages = []
         for msg in response:
+            message_id = msg.get("message_id")
+            
             # Add user message
             if msg.get("user_message"):
                 transformed_messages.append({
                     "content": msg["user_message"],
+                    "user_message": msg["user_message"],
                     "userType": "user",
                     "timestamp": msg.get("date", ""),
+                    "message_id": message_id,
                     "sources": []
                 })
             
@@ -113,8 +117,10 @@ class APIClient:
             if msg.get("assistant_message"):
                 transformed_messages.append({
                     "content": msg["assistant_message"],
+                    "assistant_message": msg["assistant_message"],
                     "userType": "bot",
                     "timestamp": msg.get("date", ""),
+                    "message_id": message_id,
                     "sources": []
                 })
         
@@ -145,6 +151,16 @@ class APIClient:
         """Update the title of a chat"""
         payload = {"title": new_title}
         return self._make_request("PUT", f"/chat/message/chat/{chat_id}/title", json=payload)
+    
+    def update_message(self, message_id: str, new_user_message: str) -> Optional[Dict[str, Any]]:
+        """Update a message content"""
+        payload = {"user_message": new_user_message}
+        return self._make_request("PUT", f"/chat/message/{message_id}", json=payload)
+    
+    def update_message_and_regenerate(self, message_id: str, new_user_message: str) -> Optional[Dict[str, Any]]:
+        """Update a message content and regenerate AI response"""
+        payload = {"user_message": new_user_message}
+        return self._make_request("PUT", f"/chat/message/{message_id}/regenerate", json=payload)
     
     # Document endpoints
     def upload_document(self, user_id: str, file) -> Optional[Dict[str, Any]]:
