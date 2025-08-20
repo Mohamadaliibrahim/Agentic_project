@@ -2,7 +2,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from typing import List, Optional, Dict, Any
 
 from core.config import settings
+from core.logger import get_logger
 from database.interface import DatabaseInterface
+
+logger = get_logger("database.mongodb")
 
 class MongoDBAdapter(DatabaseInterface):
     """MongoDB implementation - stores data as flexible JSON in original tables"""
@@ -26,16 +29,24 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def connect(self) -> None:
         """Connect to MongoDB"""
-        self.client = AsyncIOMotorClient(self.mongodb_url)
-        self.database = self.client[self.database_name]
-        await self.create_indexes()
-        print(f"Connected to MongoDB: {self.database_name}")
+        try:
+            logger.info(f"Connecting to MongoDB: {self.database_name}")
+            self.client = AsyncIOMotorClient(self.mongodb_url)
+            self.database = self.client[self.database_name]
+            await self.create_indexes()
+            logger.info(f"Successfully connected to MongoDB: {self.database_name}")
+        except Exception as e:
+            logger.error(f"Failed to connect to MongoDB: {str(e)}", exc_info=True)
+            raise
     
     async def disconnect(self) -> None:
         """Disconnect from MongoDB"""
-        if self.client:
-            self.client.close()
-            print("Disconnected from MongoDB")
+        try:
+            if self.client:
+                self.client.close()
+                logger.info("Disconnected from MongoDB")
+        except Exception as e:
+            logger.error(f"Error disconnecting from MongoDB: {str(e)}", exc_info=True)
     
     async def create_indexes(self) -> None:
         """Create MongoDB indexes for pure JSON storage"""
@@ -192,31 +203,36 @@ class MongoDBAdapter(DatabaseInterface):
     
     async def update_message(self, message_id: str, update_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a message in chat_messages table with pure JSON data"""
-        print(f"DB DEBUG: Looking for message_id: {message_id}")
-        doc = await self.database.chat_messages.find_one({"message_id": message_id})
-        if not doc:
-            print(f"DB DEBUG: No document found for message_id: {message_id}")
+        try:
+            logger.debug(f"Looking for message_id: {message_id}")
+            doc = await self.database.chat_messages.find_one({"message_id": message_id})
+            if not doc:
+                logger.warning(f"No document found for message_id: {message_id}")
+                return None
+            
+            logger.debug(f"Found document for message_id: {message_id}")
+            current_data = self._from_json_document(doc)
+            
+            current_data.update(update_data)
+            logger.debug(f"Updating message_id {message_id} with new data")
+            
+            result = await self.database.chat_messages.update_one(
+                {"message_id": message_id},
+                {"$set": current_data}
+            )
+            
+            logger.debug(f"Update result - matched: {result.matched_count}, modified: {result.modified_count}")
+            
+            if result.modified_count > 0:
+                logger.info(f"Successfully updated message_id: {message_id}")
+                return current_data
+            else:
+                logger.warning(f"No changes made to message_id: {message_id}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error updating message {message_id}: {str(e)}", exc_info=True)
             return None
-        
-        print(f"DB DEBUG: Found document: {doc}")
-        current_data = self._from_json_document(doc)
-        print(f"DB DEBUG: Current data after conversion: {current_data}")
-        
-        current_data.update(update_data)
-        print(f"DB DEBUG: Data after update: {current_data}")
-        
-        result = await self.database.chat_messages.update_one(
-            {"message_id": message_id},
-            {"$set": current_data}
-        )
-        
-        print(f"DB DEBUG: Update result - matched: {result.matched_count}, modified: {result.modified_count}")
-        
-        if result.modified_count > 0:
-            print(f"DB DEBUG: Returning updated data: {current_data}")
-            return current_data
-        print("DB DEBUG: No documents were modified")
-        return None
     
     async def delete_message(self, message_id: str) -> bool:
         """Delete a message from chat_messages table"""

@@ -149,7 +149,7 @@ async def delete_chunks_by_file_id(file_id: str) -> bool:
     """
     try:
         db = get_db()
-        success = await db.delete_document(file_id)  # This should delete chunks too
+        success = await db.delete_document(file_id)
         
         if success:
             logger.info(f"Deleted chunks for file {file_id}")

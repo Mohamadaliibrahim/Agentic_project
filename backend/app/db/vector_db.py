@@ -35,7 +35,6 @@ class VectorDB:
         if not FAISS_AVAILABLE:
             raise RuntimeError("FAISS is not available. Install with: pip install faiss-cpu")
         
-        # Using IndexFlatL2 for exact L2 distance search
         index = faiss.IndexFlatL2(dim)
         logger.info(f"Created FAISS index with dimension {dim}")
         return index

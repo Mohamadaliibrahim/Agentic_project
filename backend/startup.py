@@ -8,8 +8,11 @@ from dotenv import load_dotenv
 
 from core.config import settings
 from core.mistral_service import mistral_service
+from core.logger import get_logger
 
 load_dotenv()
+
+logger = get_logger("startup")
 
 class StartupHealthChecker:
     """Comprehensive health checker for all system components"""
@@ -22,22 +25,22 @@ class StartupHealthChecker:
         """Log an error that prevents startup"""
         error_msg = f"ERROR {component}: {message}"
         self.errors.append(error_msg)
-        print(error_msg)
+        logger.error(error_msg)
         
     def log_warning(self, component: str, message: str):
         """Log a warning that doesn't prevent startup"""
         warning_msg = f"WARNING {component}: {message}"
         self.warnings.append(warning_msg)
-        print(warning_msg)
+        logger.warning(warning_msg)
         
     def log_success(self, component: str, message: str):
         """Log a successful check"""
         success_msg = f"SUCCESS {component}: {message}"
-        print(success_msg)
+        logger.info(success_msg)
     
     async def check_environment_variables(self) -> bool:
         """Check if all required environment variables are set"""
-        print("\nChecking Environment Variables...")
+        logger.info("Checking Environment Variables...")
         
         required_vars = [
             ("MONGODB_URL", "Database connection string"),
@@ -195,8 +198,8 @@ class StartupHealthChecker:
     
     async def run_all_checks(self) -> bool:
         """Run all health checks"""
-        print("Starting Pre-Flight Health Checks...")
-        print("=" * 60)
+        logger.info("Starting Pre-Flight Health Checks...")
+        logger.info("=" * 60)
         
         checks = [
             ("Environment Variables", self.check_environment_variables()),
@@ -215,24 +218,24 @@ class StartupHealthChecker:
                 self.log_error(check_name, f"Health check failed with exception: {str(e)}")
                 results.append(False)
         
-        print("\n" + "=" * 60)
-        print("Health Check Summary:")
+        logger.info("=" * 60)
+        logger.info("Health Check Summary:")
         
         if self.warnings:
-            print(f"\nWarnings ({len(self.warnings)}):")
+            logger.warning(f"Warnings ({len(self.warnings)}):")
             for warning in self.warnings:
-                print(f"   {warning}")
+                logger.warning(f"   {warning}")
         
         if self.errors:
-            print(f"\nErrors ({len(self.errors)}):")
+            logger.error(f"Errors ({len(self.errors)}):")
             for error in self.errors:
-                print(f"   {error}")
-            print("\nCannot start server due to the above errors!")
+                logger.error(f"   {error}")
+            logger.error("Cannot start server due to the above errors!")
             return False
         
         all_passed = all(results)
         if all_passed:
-            print("\nAll health checks passed! Starting server...")
+            logger.info("All health checks passed! Starting server...")
         
         return all_passed
 

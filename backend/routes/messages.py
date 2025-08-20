@@ -6,6 +6,7 @@ Chat message management endpoints
 from fastapi import APIRouter, HTTPException, status, Query, Path
 from typing import List, Optional
 from core import crud
+from core.logger import get_logger
 from data_validation import (
     ChatMessageResponse, ChatMessageUpdate, ChatRequest, ChatResponse,
     DocumentQueryRequest, DocumentQueryResponse, ChatCollectionResponse, ChatCollectionItem,
@@ -15,9 +16,8 @@ from database.factory import get_db
 from pymongo.errors import PyMongoError, DuplicateKeyError, ServerSelectionTimeoutError
 from bson.errors import InvalidId
 from datetime import datetime
-import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger("routes.messages")
 router = APIRouter(prefix="/chat/message", tags=["Messages"])
 
 def handle_database_exceptions(e: Exception, operation: str = "operation"):
@@ -87,17 +87,65 @@ async def chat_message(
         # Record message sending timestamp
         message_sent_timestamp = datetime.utcnow()
         
+        # === COMPREHENSIVE USER MESSAGE LOGGING ===
+        logger.info("=" * 80)
+        logger.info("NEW USER MESSAGE RECEIVED")
+        logger.info(f"User ID: {request.user_id}")
+        logger.info(f"Query: {request.query}")
+        logger.info(f"Chat ID: {chat_id if chat_id else 'NEW CONVERSATION'}")
+        logger.info(f"Timestamp: {message_sent_timestamp.isoformat()}")
+        logger.info(f"Query Length: {len(request.query)} characters")
+        logger.info("=" * 80)
+        
         # Generate chat_id if not provided (new conversation)
         chat_id = chat_id if chat_id else str(uuid.uuid4())
         
+        if not chat_id:
+            logger.info(f"Generated new chat ID: {chat_id}")
+        else:
+            logger.info(f"Using existing chat ID: {chat_id}")
+        
         # Get conversation history for this chat to provide context
+        logger.info("RETRIEVING CONVERSATION HISTORY...")
         conversation_history = []
         if chat_id:  # If existing chat, get previous messages
             db = get_db()
             previous_messages = await db.get_messages_by_chat_id(chat_id)
             conversation_history = previous_messages
+            logger.info(f"Found {len(conversation_history)} previous messages in conversation")
+            for i, msg in enumerate(conversation_history[-3:], 1):  # Log last 3 for context
+                logger.debug(f"   Previous message {i}: User='{msg.get('user_message', '')[:50]}...' | AI='{msg.get('assistant_message', '')[:50]}...'")
+        else:
+            logger.info("No previous conversation history - this is a new chat")
         
         # Query documents using RAG - searches across all user documents
+        logger.info("STARTING RAG DOCUMENT SEARCH...")
+        logger.info(f"Searching documents for user {request.user_id}")
+        logger.info(f"Search query: '{request.query}'")
+        rag_start_time = datetime.utcnow()
+        
+        rag_result = await rag_service.query_documents(
+            query=request.query,
+            user_id=request.user_id  # Removed document_id - searches all user documents
+        )
+        
+        rag_end_time = datetime.utcnow()
+        rag_duration = (rag_end_time - rag_start_time).total_seconds()
+        logger.info(f"RAG SEARCH COMPLETED in {rag_duration:.3f} seconds")
+        logger.info(f"Found {rag_result.get('context_used', 0)} relevant document chunks")
+        logger.info(f"Initial answer length: {len(rag_result.get('answer', ''))} characters")
+        
+        # Log source chunks found
+        source_chunks = rag_result.get('source_chunks', [])
+        if source_chunks:
+            logger.info(f"DOCUMENT SOURCES FOUND:")
+            for i, chunk in enumerate(source_chunks[:3], 1):  # Log first 3 chunks
+                logger.info(f"   Source {i}: {chunk.get('filename', 'Unknown')} (similarity: {chunk.get('similarity_score', 0):.3f})")
+                logger.debug(f"   Content preview: '{chunk.get('text', '')[:100]}...'")
+        else:
+            logger.warning("No relevant document sources found for this query")
+        
+        # Enhance the RAG response with conversation context if available
         rag_result = await rag_service.query_documents(
             query=request.query,
             user_id=request.user_id  # Removed document_id - searches all user documents
@@ -105,11 +153,17 @@ async def chat_message(
         
         # Enhance the RAG response with conversation context if available
         if conversation_history:
+            logger.info("ENHANCING RESPONSE WITH CONVERSATION CONTEXT...")
+            logger.info(f"Using {len(conversation_history)} previous messages for context")
+            
             # Build conversation context for the AI
             context_messages = []
-            for msg in conversation_history[-5:]:  # Last 5 exchanges for context
-                context_messages.append(f"Previous Q: {msg.get('user_message', '')}")
-                context_messages.append(f"Previous A: {msg.get('assistant_message', '')}")
+            for i, msg in enumerate(conversation_history[-5:], 1):  # Last 5 exchanges for context
+                user_msg = msg.get('user_message', '')
+                ai_msg = msg.get('assistant_message', '')
+                context_messages.append(f"Previous Q: {user_msg}")
+                context_messages.append(f"Previous A: {ai_msg}")
+                logger.debug(f"   Context {i}: User='{user_msg[:30]}...' | AI='{ai_msg[:30]}...'")
             
             conversation_context = "\n".join(context_messages)
             
@@ -134,6 +188,10 @@ Instructions:
 
 Answer:"""
             
+            logger.info("SENDING ENHANCED QUERY TO MISTRAL AI...")
+            logger.info(f"Enhanced prompt length: {len(enhanced_prompt)} characters")
+            mistral_start_time = datetime.utcnow()
+            
             from core.mistral_service import mistral_service
             enhanced_answer = await mistral_service.generate_response(
                 user_message=enhanced_prompt,
@@ -141,18 +199,34 @@ Answer:"""
                 conversation_history=conversation_history
             )
             
+            mistral_end_time = datetime.utcnow()
+            mistral_duration = (mistral_end_time - mistral_start_time).total_seconds()
+            logger.info(f"MISTRAL AI RESPONSE RECEIVED in {mistral_duration:.3f} seconds")
+            logger.info(f"Enhanced answer length: {len(enhanced_answer)} characters")
+            
             if len(enhanced_answer) > len(rag_result['answer']) * 0.8:
+                logger.info("Using enhanced AI response (significantly longer/better)")
                 rag_result['answer'] = enhanced_answer
+            else:
+                logger.info("Using original RAG response (enhanced response not significantly better)")
+        else:
+            logger.info("No conversation history available - using direct RAG response")
         
         answer_received_timestamp = datetime.utcnow()
+        total_processing_time = (answer_received_timestamp - message_sent_timestamp).total_seconds()
+        
+        logger.info("PREPARING TO SAVE MESSAGE TO DATABASE...")
+        logger.info(f"Total processing time: {total_processing_time:.3f} seconds")
         
         db = get_db()
         next_message_id = await db.get_next_message_id_for_chat(chat_id)
+        logger.info(f"Generated message ID: {next_message_id}")
         
         source_info = ""
         sources_list = []
         if rag_result.get('source_chunks'):
             source_info = f" [Sources: {len(rag_result['source_chunks'])} document chunks]"
+            logger.info(f"Adding source information: {len(rag_result['source_chunks'])} chunks")
             sources_list = [
                 SourceChunk(
                     document=chunk.get('filename', 'unknown'),
@@ -161,6 +235,11 @@ Answer:"""
                 )
                 for chunk in rag_result['source_chunks'][:3]
             ]
+        else:
+            logger.warning("No source chunks to include in response")
+
+        final_answer = rag_result['answer'] + source_info
+        logger.info(f"Final answer length: {len(final_answer)} characters")
         
         message_data = {
             "message_id": str(next_message_id),
@@ -168,16 +247,24 @@ Answer:"""
             "chat_id": chat_id,
             "date": datetime.utcnow(),
             "user_message": request.query,
-            "assistant_message": rag_result['answer'] + source_info,
+            "assistant_message": final_answer,
             "query_type": "document_query",
             "source_chunks": rag_result.get('source_chunks', []),
             "message_sent_timestamp": message_sent_timestamp,
             "answer_received_timestamp": answer_received_timestamp
         }
         
+        logger.info("SAVING MESSAGE TO DATABASE...")
+        logger.info(f"Message data: User='{request.query[:50]}...' | AI='{final_answer[:50]}...'")
+        db_save_start = datetime.utcnow()
+        
         await db.create_message(message_data)
         
+        db_save_end = datetime.utcnow()
+        db_save_duration = (db_save_end - db_save_start).total_seconds()
+        logger.info(f"MESSAGE SAVED TO DATABASE in {db_save_duration:.3f} seconds")
 
+        logger.info("UPDATING/CREATING CHAT COLLECTION...")
         chat_collection_data = {
             "chat_id": chat_id,
             "user_id": request.user_id,
@@ -188,17 +275,21 @@ Answer:"""
             "query_type": "document_query"
         }
         
+        logger.info(f"Chat collection data: Title='{chat_collection_data['chat_title']}'")
         existing_collections = await db.get_chat_collections_by_user(request.user_id)
         existing_chat = next((c for c in existing_collections if c.get('chat_id') == chat_id), None)
         
         if existing_chat:
+            logger.info(f"Updating existing chat collection for chat_id: {chat_id}")
             await db.update_chat_collection_item(chat_id, {
                 "last_message_date": datetime.utcnow(),
                 "message_count": next_message_id
             })
         else:
+            logger.info(f"Creating new chat collection for chat_id: {chat_id}")
             await db.store_chat_collection_item(chat_collection_data)
         
+        logger.info("PREPARING RESPONSE FOR CLIENT...")
         messages = [
             ChatMessageItem(
                 content=request.query,
@@ -214,10 +305,25 @@ Answer:"""
             )
         ]
         
+        final_timestamp = datetime.utcnow()
+        complete_duration = (final_timestamp - message_sent_timestamp).total_seconds()
+        
+        logger.info("MESSAGE PROCESSING COMPLETED SUCCESSFULLY")
+        logger.info(f"Total end-to-end time: {complete_duration:.3f} seconds")
+        logger.info(f"Returning {len(messages)} messages to client")
+        logger.info(f"User message: '{request.query}'")
+        logger.info(f"AI response length: {len(rag_result['answer'])} characters")
+        logger.info(f"Sources included: {len(sources_list)}")
+        logger.info("=" * 80)
+        
         return ChatMessagesResponse(messages=messages)
         
     except Exception as e:
-        logger.error(f"Error in document query: {str(e)}")
+        logger.error("ERROR IN MESSAGE PROCESSING")
+        logger.error(f"Error details: {str(e)}")
+        logger.error(f"User ID: {request.user_id if 'request' in locals() else 'Unknown'}")
+        logger.error(f"Query: {request.query if 'request' in locals() else 'Unknown'}")
+        logger.error("=" * 80, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to query documents: {str(e)}"
