@@ -9,6 +9,7 @@ from core.mistral_service import mistral_service
 from core.embedding_service import embedding_service
 from database.factory import get_db
 from datetime import datetime
+from core.logger import log_debug_session, log_info_session, log_timing, log_error_session, log_prompt
 
 logger = logging.getLogger("rag_service")
 
@@ -22,7 +23,8 @@ class RAGService:
     async def query_documents(
         self, 
         query: str, 
-        user_id: str
+        user_id: str,
+        session_id: str = None
     ) -> Dict[str, Any]:
         """
         Query documents using RAG approach with shared vector_storage (like rag_testing notebook)
@@ -31,19 +33,22 @@ class RAGService:
         Args:
             query: User's question
             user_id: ID of the user making the query
+            session_id: Session ID for tracking logs
             
         Returns:
             Dictionary with answer and source chunks
         """
+        if not session_id:
+            session_id = "unknown"
+            
         try:
-            logger.info(f"RAG SERVICE: Starting document search for user {user_id}")
-            logger.info(f"RAG SERVICE: Query='{query}'")
-            logger.info(f"RAG SERVICE: Max chunks to retrieve={self.max_context_chunks}")
+            log_info_session(session_id, "rag_service.py", f"Starting document search for user {user_id}")
+            log_debug_session(session_id, "rag_service.py", f"Query: '{query}' | Max chunks: {self.max_context_chunks}")
             search_start = datetime.utcnow()
             
             from core.document_processor import document_processor
             
-            logger.info("RAG SERVICE: Calling document processor for search...")
+            log_debug_session(session_id, "rag_service.py", "Calling document processor for search...")
             search_results = await document_processor.search_user_documents(
                 user_id=user_id,
                 query=query,
@@ -52,11 +57,10 @@ class RAGService:
             
             search_end = datetime.utcnow()
             search_duration = (search_end - search_start).total_seconds()
-            logger.info(f"RAG SERVICE: Document search completed in {search_duration:.3f}s")
-            logger.info(f"RAG SERVICE: Found {len(search_results) if search_results else 0} results")
+            log_timing(session_id, "document_search", search_duration, f"Found {len(search_results) if search_results else 0} results")
             
             if not search_results:
-                logger.warning("RAG SERVICE: No search results found - returning default response")
+                log_error_session(session_id, "No search results found - returning default response")
                 return {
                     "answer": "I couldn't find any relevant information in your documents to answer this question.",
                     "source_chunks": [],
@@ -64,12 +68,12 @@ class RAGService:
                     "context_used": 0
                 }
             
-            logger.info("RAG SERVICE: Processing search results...")
+            log_debug_session(session_id, "rag_service.py", "Processing search results...")
             relevant_chunks = []
             for i, result in enumerate(search_results[:self.max_context_chunks], 1):  # Ensure we only take top max_context_chunks
                 metadata = result["metadata"]
                 score = result["score"]
-                logger.debug(f"   Result {i}: {metadata['filename']} (score: {score:.3f})")
+                log_debug_session(session_id, "rag_service.py", f"Result {i}: {metadata['filename']} (score: {score:.3f})")
                 
                 chunk_data = {
                     "text": metadata["content"],
@@ -84,34 +88,32 @@ class RAGService:
             
             # Explicit check to ensure we don't exceed 5 chunks
             if len(relevant_chunks) > 5:
-                logger.warning(f"RAG SERVICE: Limiting {len(relevant_chunks)} chunks to top 5 most similar")
+                log_debug_session(session_id, "rag_service.py", f"Limiting {len(relevant_chunks)} chunks to top 5 most similar")
                 relevant_chunks = relevant_chunks[:5]
             
-            logger.info(f"RAG SERVICE: Using {len(relevant_chunks)} chunks (max allowed: {self.max_context_chunks})")
+            log_info_session(session_id, "rag_service.py", f"Using {len(relevant_chunks)} chunks (max allowed: {self.max_context_chunks})")
             
             # Log details of selected chunks
             for i, chunk in enumerate(relevant_chunks, 1):
-                logger.info(f"   Chunk {i}: {chunk['filename']} | Score: {chunk['similarity_score']:.4f} | Length: {len(chunk['text'])} chars")
+                log_debug_session(session_id, "rag_service.py", f"Chunk {i}: {chunk['filename']} | Score: {chunk['similarity_score']:.4f} | Length: {len(chunk['text'])} chars")
             
-            logger.info(f"RAG SERVICE: Processed {len(relevant_chunks)} chunks")
+            log_debug_session(session_id, "rag_service.py", f"Processed {len(relevant_chunks)} chunks")
             
-            logger.info("RAG SERVICE: Preparing context from chunks...")
+            log_debug_session(session_id, "rag_service.py", "Preparing context from chunks...")
             context_start = datetime.utcnow()
-            context = self._prepare_context(relevant_chunks)
+            context = self._prepare_context(relevant_chunks, session_id)
             context_end = datetime.utcnow()
             context_duration = (context_end - context_start).total_seconds()
             
-            logger.info(f"RAG SERVICE: Context prepared in {context_duration:.3f}s")
-            logger.info(f"RAG SERVICE: Context length: {len(context)} characters")
+            log_timing(session_id, "context_preparation", context_duration, f"Context length: {len(context)} characters")
             
-            logger.info("RAG SERVICE: Generating AI response from context...")
+            log_debug_session(session_id, "rag_service.py", "Generating AI response from context...")
             response_start = datetime.utcnow()
-            answer = await self._generate_rag_response(query, context)
+            answer = await self._generate_rag_response(query, context, session_id)
             response_end = datetime.utcnow()
             response_duration = (response_end - response_start).total_seconds()
             
-            logger.info(f"RAG SERVICE: AI response generated in {response_duration:.3f}s")
-            logger.info(f"RAG SERVICE: Response length: {len(answer)} characters")
+            log_timing(session_id, "rag_response_generation", response_duration, f"Response length: {len(answer)} characters")
             
             response = {
                 "answer": answer,
@@ -121,14 +123,13 @@ class RAGService:
             }
             
             total_time = (response_end - search_start).total_seconds()
-            logger.info(f"RAG SERVICE: Query completed successfully in {total_time:.3f}s total")
-            logger.info(f"RAG SERVICE: Used {len(relevant_chunks)} chunks from shared storage")
+            log_timing(session_id, "rag_query_total", total_time, f"Used {len(relevant_chunks)} chunks from shared storage")
+            log_info_session(session_id, "rag_service.py", f"Query completed successfully - total time: {total_time:.3f}s")
             return response
             
         except Exception as e:
-            logger.error(f"RAG SERVICE ERROR: {str(e)}")
-            logger.error(f"RAG SERVICE: Query='{query}', User={user_id}")
-            logger.error("RAG SERVICE: Full error details:", exc_info=True)
+            log_error_session(session_id, f"RAG query failed: {str(e)}")
+            log_debug_session(session_id, "rag_service.py", f"Query='{query}', User={user_id}")
             return {
                 "answer": f"An error occurred while processing your question: {str(e)}",
                 "source_chunks": [],
@@ -136,8 +137,12 @@ class RAGService:
                 "context_used": 0
             }
     
-    def _prepare_context(self, chunks: List[Dict[str, Any]]) -> str:
+    def _prepare_context(self, chunks: List[Dict[str, Any]], session_id: str = None) -> str:
         """Prepare context string from relevant chunks"""
+        if not session_id:
+            session_id = "unknown"
+            
+        log_debug_session(session_id, "rag_service.py", f"Preparing context from {len(chunks)} chunks")
         context_parts = []
         total_length = 0
         
@@ -149,15 +154,21 @@ class RAGService:
                 if remaining_space > 100:
                     chunk_text = chunk_text[:remaining_space] + "..."
                     context_parts.append(f"[Document: {chunk['filename']}]\n{chunk_text}")
+                    log_debug_session(session_id, "rag_service.py", f"Truncated chunk from {chunk['filename']} to fit context limit")
                 break
             
             context_parts.append(f"[Document: {chunk['filename']}]\n{chunk_text}")
             total_length += len(chunk_text)
         
-        return "\n\n".join(context_parts)
+        final_context = "\n\n".join(context_parts)
+        log_debug_session(session_id, "rag_service.py", f"Final context prepared: {len(final_context)} characters from {len(context_parts)} chunks")
+        return final_context
     
-    async def _generate_rag_response(self, query: str, context: str) -> str:
+    async def _generate_rag_response(self, query: str, context: str, session_id: str = None) -> str:
         """Generate response using Mistral AI with document context"""
+        if not session_id:
+            session_id = "unknown"
+            
         try:
             rag_prompt = f"""You are a helpful AI assistant that answers questions based on provided document content.
 
@@ -175,15 +186,21 @@ class RAGService:
 
             Answer:"""
             
+            log_debug_session(session_id, "rag_service.py", f"Calling Mistral for RAG response - context length: {len(context)}")
+            
             response = await mistral_service.generate_response(
                 user_message=rag_prompt,
-                user_id="rag_system"
+                session_id=session_id
             )
             
+            # Log the complete RAG prompt and response
+            log_prompt(session_id, rag_prompt, response, "rag_generation")
+            
+            log_debug_session(session_id, "rag_service.py", f"RAG response generated: {len(response)} characters")
             return response
             
         except Exception as e:
-            logger.error(f"Error generating RAG response: {str(e)}")
+            log_error_session(session_id, f"Error generating RAG response: {str(e)}")
             return f"I apologize, but I encountered an error while generating the response: {str(e)}"
     
     def _format_source_chunks(self, chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

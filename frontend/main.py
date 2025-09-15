@@ -45,7 +45,7 @@ except ImportError:
     create_chat_bubble = lambda msg, is_user: f"<div>{msg.get('content', '')}</div>"
     
     config = type('config', (), {
-        'API_BASE_URL': 'http://127.0.0.1:8010',
+        'API_BASE_URL': 'http://127.0.0.1:8001',
         'PAGE_TITLE': '🤖 AI Document Chat Assistant',
         'PAGE_ICON': '🤖'
     })()
@@ -750,7 +750,7 @@ def run_streamlit_app():
     st.markdown("""
     <div style="text-align: center; color: #666; padding: 1rem;">
         🤖 AI Document Chat Assistant | Built with Streamlit & FastAPI | 
-        <a href="http://127.0.0.1:8010/docs" target="_blank">API Docs</a>
+        <a href="http://127.0.0.1:8001/docs" target="_blank">API Docs</a>
     </div>
     """, unsafe_allow_html=True)
 

@@ -7,9 +7,13 @@ class Settings:
     """Application settings"""
     
     HOST: str = "127.0.0.1"
-    PORT: int = 8010
+    PORT: int = 8001
     RELOAD: bool = True
     LOG_LEVEL: str = "info"
+    
+    # Logging configuration
+    DEBUG_THIRD_PARTY: bool = False  # Set to True to see third-party debug logs
+    MINIMAL_LOGGING: bool = True     # Set to False for verbose application logs
     
     MONGODB_URL: str = os.getenv("MONGODB_URL", "mongodb://localhost:27017")
     DATABASE_NAME: str = os.getenv("DATABASE_NAME", "bot_database")

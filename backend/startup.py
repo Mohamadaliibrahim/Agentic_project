@@ -136,19 +136,22 @@ class StartupHealthChecker:
                 elif response.status_code == 429:
                     self.log_warning("Mistral AI", "API rate limit reached - but connection is working")
                     return True
+                elif response.status_code == 503:
+                    self.log_warning("Mistral AI", "API service temporarily unavailable (503) - will retry during operation")
+                    return True  # Don't block server startup for temporary service issues
                 else:
-                    self.log_error("Mistral AI", f"API returned status code {response.status_code}")
-                    return False
+                    self.log_warning("Mistral AI", f"API returned status code {response.status_code} - will retry during operation")
+                    return True  # Make other API errors non-blocking
                     
         except httpx.TimeoutException:
-            self.log_error("Mistral AI", "API request timed out - check internet connection")
-            return False
+            self.log_warning("Mistral AI", "API request timed out - will retry during operation")
+            return True  # Don't block server startup for network timeouts
         except httpx.RequestError as e:
-            self.log_error("Mistral AI", f"Network error: {str(e)}")
-            return False
+            self.log_warning("Mistral AI", f"Network error: {str(e)} - will retry during operation")
+            return True  # Don't block server startup for network issues
         except Exception as e:
-            self.log_error("Mistral AI", f"Unexpected error: {str(e)}")
-            return False
+            self.log_warning("Mistral AI", f"Unexpected error: {str(e)} - will retry during operation")
+            return True  # Don't block server startup for unexpected errors
     
     async def check_server_configuration(self) -> bool:
         """Check server configuration"""

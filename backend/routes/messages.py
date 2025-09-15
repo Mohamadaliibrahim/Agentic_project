@@ -1,12 +1,15 @@
 """
 Message Routes
-Chat message management endpoints
+Chat message management endpoints with comprehensive session-based logging
 """
 
 from fastapi import APIRouter, HTTPException, status, Query, Path
 from typing import List, Optional
 from core import crud
-from core.logger import get_logger
+from core.logger import (
+    get_logger, log_debug_session, log_info_session, 
+    log_timing, log_prompt, log_error_session
+)
 from data_validation import (
     ChatMessageResponse, ChatMessageUpdate, ChatRequest, ChatResponse,
     DocumentQueryRequest, DocumentQueryResponse, ChatCollectionResponse, ChatCollectionItem,
@@ -16,6 +19,7 @@ from database.factory import get_db
 from pymongo.errors import PyMongoError, DuplicateKeyError, ServerSelectionTimeoutError
 from bson.errors import InvalidId
 from datetime import datetime
+import uuid
 
 logger = get_logger("routes.messages")
 router = APIRouter(prefix="/chat/message", tags=["Messages"])
@@ -84,77 +88,76 @@ async def chat_message(
         import uuid
         from datetime import datetime
         
+        # Generate unique session ID for tracking this message through all stages
+        session_id = str(uuid.uuid4())[:8]
+        
         # Record message sending timestamp
         message_sent_timestamp = datetime.utcnow()
         
         # === COMPREHENSIVE USER MESSAGE LOGGING ===
-        logger.info("=" * 80)
-        logger.info("NEW USER MESSAGE RECEIVED")
-        logger.info(f"User ID: {request.user_id}")
-        logger.info(f"Query: {request.query}")
-        logger.info(f"Chat ID: {chat_id if chat_id else 'NEW CONVERSATION'}")
-        logger.info(f"Timestamp: {message_sent_timestamp.isoformat()}")
-        logger.info(f"Query Length: {len(request.query)} characters")
-        logger.info("=" * 80)
+        log_info_session(session_id, "messages.py", f"NEW USER MESSAGE | User: {request.user_id} | Query: '{request.query}' | Length: {len(request.query)} chars")
+        log_timing(session_id, "message_start", 0.0, "User message received")
         
         # Generate chat_id if not provided (new conversation)
         chat_id = chat_id if chat_id else str(uuid.uuid4())
         
         if not chat_id:
-            logger.info(f"Generated new chat ID: {chat_id}")
+            log_debug_session(session_id, "messages.py", f"Generated new chat ID: {chat_id}")
         else:
-            logger.info(f"Using existing chat ID: {chat_id}")
+            log_debug_session(session_id, "messages.py", f"Using existing chat ID: {chat_id}")
         
         # Get conversation history for this chat to provide context
-        logger.info("RETRIEVING CONVERSATION HISTORY...")
+        log_debug_session(session_id, "messages.py", "Retrieving conversation history...")
+        history_start = datetime.utcnow()
+        
         conversation_history = []
         if chat_id:  # If existing chat, get previous messages
             db = get_db()
             previous_messages = await db.get_messages_by_chat_id(chat_id)
             conversation_history = previous_messages
-            logger.info(f"Found {len(conversation_history)} previous messages in conversation")
-            for i, msg in enumerate(conversation_history[-3:], 1):  # Log last 3 for context
-                logger.debug(f"   Previous message {i}: User='{msg.get('user_message', '')[:50]}...' | AI='{msg.get('assistant_message', '')[:50]}...'")
+            history_duration = (datetime.utcnow() - history_start).total_seconds()
+            log_timing(session_id, "conversation_history", history_duration, f"Retrieved {len(conversation_history)} messages")
+            log_info_session(session_id, "messages.py", f"Found {len(conversation_history)} previous messages in conversation")
         else:
-            logger.info("No previous conversation history - this is a new chat")
+            log_info_session(session_id, "messages.py", "No previous conversation history - this is a new chat")
         
         # Query documents using RAG - searches across all user documents
-        logger.info("STARTING RAG DOCUMENT SEARCH...")
-        logger.info(f"Searching documents for user {request.user_id}")
-        logger.info(f"Search query: '{request.query}'")
+        log_info_session(session_id, "messages.py", f"Starting RAG document search for query: '{request.query}'")
         rag_start_time = datetime.utcnow()
         
         rag_result = await rag_service.query_documents(
             query=request.query,
-            user_id=request.user_id  # Removed document_id - searches all user documents
+            user_id=request.user_id,
+            session_id=session_id  # Pass session ID for tracking
         )
         
         rag_end_time = datetime.utcnow()
         rag_duration = (rag_end_time - rag_start_time).total_seconds()
-        logger.info(f"RAG SEARCH COMPLETED in {rag_duration:.3f} seconds")
-        logger.info(f"Found {rag_result.get('context_used', 0)} relevant document chunks")
-        logger.info(f"Initial answer length: {len(rag_result.get('answer', ''))} characters")
+        log_timing(session_id, "rag_search", rag_duration, f"Found {rag_result.get('context_used', 0)} chunks")
+        log_info_session(session_id, "messages.py", f"RAG search completed in {rag_duration:.3f}s - {rag_result.get('context_used', 0)} chunks found")
         
-        # Log source chunks found
+        # Log first chunk details for timing analysis
         source_chunks = rag_result.get('source_chunks', [])
         if source_chunks:
-            logger.info(f"DOCUMENT SOURCES FOUND:")
+            first_chunk = source_chunks[0]
+            log_timing(session_id, "first_chunk", rag_duration, f"First chunk: {first_chunk.get('filename', 'Unknown')} | Score: {first_chunk.get('similarity_score', 0):.3f}")
+            log_debug_session(session_id, "messages.py", f"Document sources found: {len(source_chunks)} chunks")
             for i, chunk in enumerate(source_chunks[:3], 1):  # Log first 3 chunks
-                logger.info(f"   Source {i}: {chunk.get('filename', 'Unknown')} (similarity: {chunk.get('similarity_score', 0):.3f})")
-                logger.debug(f"   Content preview: '{chunk.get('text', '')[:100]}...'")
+                log_debug_session(session_id, "messages.py", f"Source {i}: {chunk.get('filename', 'Unknown')} (similarity: {chunk.get('similarity_score', 0):.3f})")
         else:
-            logger.warning("No relevant document sources found for this query")
+            log_error_session(session_id, "No relevant document sources found for this query")
         
         # Enhance the RAG response with conversation context if available
         rag_result = await rag_service.query_documents(
             query=request.query,
-            user_id=request.user_id  # Removed document_id - searches all user documents
+            user_id=request.user_id,  # Removed document_id - searches all user documents
+            session_id=session_id
         )
         
         # Enhance the RAG response with conversation context if available
         if conversation_history:
-            logger.info("ENHANCING RESPONSE WITH CONVERSATION CONTEXT...")
-            logger.info(f"Using {len(conversation_history)} previous messages for context")
+            log_debug_session(session_id, "messages.py", f"Enhancing response with {len(conversation_history)} conversation messages")
+            enhance_start = datetime.utcnow()
             
             # Build conversation context for the AI
             context_messages = []
@@ -163,7 +166,7 @@ async def chat_message(
                 ai_msg = msg.get('assistant_message', '')
                 context_messages.append(f"Previous Q: {user_msg}")
                 context_messages.append(f"Previous A: {ai_msg}")
-                logger.debug(f"   Context {i}: User='{user_msg[:30]}...' | AI='{ai_msg[:30]}...'")
+                log_debug_session(session_id, "messages.py", f"Context {i}: User='{user_msg[:30]}...' | AI='{ai_msg[:30]}...'")
             
             conversation_context = "\n".join(context_messages)
             
@@ -188,29 +191,37 @@ Instructions:
 
 Answer:"""
             
-            logger.info("SENDING ENHANCED QUERY TO MISTRAL AI...")
-            logger.info(f"Enhanced prompt length: {len(enhanced_prompt)} characters")
+            log_debug_session(session_id, "messages.py", f"Prepared enhanced prompt with {len(enhanced_prompt)} characters")
+            log_debug_session(session_id, "messages.py", f"Sending enhanced query to Mistral AI with conversation context")
             mistral_start_time = datetime.utcnow()
             
             from core.mistral_service import mistral_service
             enhanced_answer = await mistral_service.generate_response(
                 user_message=enhanced_prompt,
                 user_id=request.user_id,
-                conversation_history=conversation_history
+                conversation_history=conversation_history,
+                session_id=session_id  # Pass session ID
             )
             
             mistral_end_time = datetime.utcnow()
             mistral_duration = (mistral_end_time - mistral_start_time).total_seconds()
-            logger.info(f"MISTRAL AI RESPONSE RECEIVED in {mistral_duration:.3f} seconds")
-            logger.info(f"Enhanced answer length: {len(enhanced_answer)} characters")
+            log_timing(session_id, "mistral_enhanced", mistral_duration, f"Enhanced response: {len(enhanced_answer)} chars")
+            
+            # Log the final result only (avoid duplicates)
+            log_prompt(session_id, request.query, enhanced_answer, "rag-enhanced")
             
             if len(enhanced_answer) > len(rag_result['answer']) * 0.8:
-                logger.info("Using enhanced AI response (significantly longer/better)")
+                log_info_session(session_id, "messages.py", "Using enhanced AI response (significantly longer/better)")
                 rag_result['answer'] = enhanced_answer
             else:
-                logger.info("Using original RAG response (enhanced response not significantly better)")
+                log_debug_session(session_id, "messages.py", "Using original RAG response (enhanced response not significantly better)")
+                
+            enhance_duration = (datetime.utcnow() - enhance_start).total_seconds()
+            log_timing(session_id, "context_enhancement", enhance_duration, "Conversation context processing")
         else:
-            logger.info("No conversation history available - using direct RAG response")
+            log_info_session(session_id, "messages.py", "No conversation history available - using direct RAG response")
+            # Log the basic RAG result
+            log_prompt(session_id, request.query, rag_result['answer'], "rag-direct")
         
         answer_received_timestamp = datetime.utcnow()
         total_processing_time = (answer_received_timestamp - message_sent_timestamp).total_seconds()
@@ -488,7 +499,8 @@ async def update_message_and_regenerate(message_id: str, update_data: ChatMessag
         new_ai_response = await mistral_service.generate_response(
             user_message=update_data.user_message,
             user_id=updated_message.user_id,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            session_id="update_message"  # Using generic session for message updates
         )
         
         # Update the message with the new AI response

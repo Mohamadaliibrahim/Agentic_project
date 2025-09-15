@@ -32,4 +32,4 @@ async def ai_health_check():
         "ai_service": "available" if ai_status else "unavailable",
         "model": mistral_service.model,
         "message": "AI service is ready" if ai_status else "AI service is not configured or unavailable"
-    }
+     }

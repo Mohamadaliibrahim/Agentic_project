@@ -6,7 +6,7 @@ import os
 
 class Config:
     # API Configuration
-    API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8010")
+    API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8001")
     
     # Streamlit Configuration
     PAGE_TITLE = "🤖 AI Document Chat Assistant"
