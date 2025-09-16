@@ -91,9 +91,9 @@ class StartupHealthChecker:
             return True
             
         except Exception as e:
-            self.log_error("Database", f"Cannot connect to MongoDB: {str(e)}")
-            self.log_error("Database", "Please ensure MongoDB is running and accessible")
-            return False
+            self.log_warning("Database", f"Cannot connect to MongoDB: {str(e)}")
+            self.log_warning("Database", "MongoDB is not running - server will start but database features won't work")
+            return False  # Make database connection non-blocking for development
     
     async def check_mistral_ai_service(self) -> bool:
         """Check Mistral AI service connectivity and authentication"""
@@ -131,7 +131,7 @@ class StartupHealthChecker:
                     self.log_success("Mistral AI", "Authentication successful")
                     return True
                 elif response.status_code == 401:
-                    self.log_error("Mistral AI", "Authentication failed - invalid API key")
+                    self.log_warning("Mistral AI", "Authentication failed - invalid API key (server will start but AI features won't work)")
                     return False
                 elif response.status_code == 429:
                     self.log_warning("Mistral AI", "API rate limit reached - but connection is working")

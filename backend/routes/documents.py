@@ -90,10 +90,39 @@ async def upload_document(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to process document: {str(e)}"
-        )
+        error_message = str(e)
+        
+        # Provide specific error codes based on the error type
+        if "authentication failed" in error_message.lower() or "mistral api authentication" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"AI Service Authentication Error: {error_message}"
+            )
+        elif "embedding" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Embedding Service Error: {error_message}"
+            )
+        elif "database" in error_message.lower() or "mongodb" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Database Service Error: {error_message}"
+            )
+        elif "timeout" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_408_REQUEST_TIMEOUT,
+                detail=f"Request Timeout: {error_message}"
+            )
+        elif "rate limit" in error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Rate Limited: {error_message}"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to process document: {error_message}"
+            )
 
 @router.get("/documents", response_model=List[DocumentInfo], tags=["Documents"])
 async def get_user_documents(user_id: str = Query(...)):
