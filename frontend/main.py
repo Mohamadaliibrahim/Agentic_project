@@ -21,7 +21,10 @@ except ImportError:
         def create_user(): return None
         @staticmethod
         def get_chat_collection(user_id): return []
-        @staticmethod
+         # Message input
+        st.markdown("---")
+        
+        # Create a form for message input@staticmethod
         def send_message(user_id, message, chat_id=None): return None
         @staticmethod
         def upload_document(user_id, file): return None
@@ -67,9 +70,9 @@ class ChatBot:
         """Get all messages for a specific chat"""
         return self.api_client.get_chat_messages(chat_id)
     
-    def send_message(self, user_id: str, message: str, chat_id: Optional[str] = None) -> Optional[Dict]:
-        """Send a message and get response"""
-        return self.api_client.send_message(user_id, message, chat_id)
+    def send_message(self, user_id: str, message: str, context: Optional[Dict] = None) -> Optional[Dict]:
+        """Send a message using the intelligent orchestrator (handles weather, documents, general questions, etc.)"""
+        return self.api_client.send_orchestrated_message(user_id, message, context)
     
     def upload_document(self, user_id: str, file) -> Optional[Dict]:
         """Upload a document"""
@@ -636,7 +639,7 @@ def run_streamlit_app():
             with col_input:
                 user_message = st.text_input(
                     "Type your message...", 
-                    placeholder="Ask me anything about your documents!",
+                    placeholder="Ask me anything - documents, weather, general questions!",
                     label_visibility="collapsed"
                 )
             
@@ -645,54 +648,63 @@ def run_streamlit_app():
         
         # Handle message sending
         if send_button and user_message:
-            current_chat_id = SessionManager.get("current_chat_id")
-            with st.spinner("🤔 AI is thinking..."):
-                response = chatbot.send_message(
-                    user_id, 
-                    user_message, 
-                    current_chat_id
-                )
+            if not user_id:
+                st.error("❌ Please start a new session first by clicking '🚀 Start New Session' in the sidebar.")
+                st.stop()
                 
-                if response:
-                    # For NEW chats: extract and store the chat_id from the backend first
-                    if not current_chat_id:
-                        # This is a new chat - we need to find the chat_id
-                        # Let's refresh chats and find the newest one for this user
-                        chats = chatbot.get_chat_collection(user_id)
-                        if chats:
-                            # Sort by creation date to get the newest chat
-                            newest_chat = max(chats, key=lambda x: x.get('creation', ''))
-                            new_chat_id = newest_chat.get('chatId')
-                            if new_chat_id:
-                                SessionManager.set("current_chat_id", new_chat_id)
-                                print(f"New chat created with ID: {new_chat_id}")  # Debug
-                                
-                                # For new chats, load the messages from the chat instead of using the response
-                                chat_messages = chatbot.get_chat_messages(new_chat_id)
-                                SessionManager.set("messages", chat_messages or [])
+            current_chat_id = SessionManager.get("current_chat_id")
+            
+            with st.spinner("🤔 AI is thinking..."):
+                # Always use the intelligent orchestrator for all questions
+                try:
+                    response = chatbot.send_message(
+                        user_id, 
+                        user_message,
+                        context={"chat_id": current_chat_id} if current_chat_id else None
+                    )
+                    
+                    # Handle orchestrator response format (now includes database storage)
+                    if response and response.get("messages"):
+                        # For NEW chats: extract and store the chat_id from the backend
+                        if not current_chat_id:
+                            # This is a new chat - refresh chats and find the newest one
+                            chats = chatbot.get_chat_collection(user_id)
+                            if chats:
+                                # Sort by creation date to get the newest chat
+                                newest_chat = max(chats, key=lambda x: x.get('creation', ''))
+                                new_chat_id = newest_chat.get('chatId')
+                                if new_chat_id:
+                                    SessionManager.set("current_chat_id", new_chat_id)
+                                    
+                                    # Load messages from the database for this chat
+                                    chat_messages = chatbot.get_chat_messages(new_chat_id)
+                                    SessionManager.set("messages", chat_messages or [])
+                                else:
+                                    # Fallback: use response messages if we can't find the chat_id
+                                    new_messages = response["messages"]
+                                    SessionManager.set("messages", new_messages)
                             else:
-                                # Fallback: use response messages if we can't find the chat_id
+                                # Fallback: use response messages if no chats found
                                 new_messages = response["messages"]
                                 SessionManager.set("messages", new_messages)
                         else:
-                            # Fallback: use response messages if no chats found
-                            new_messages = response["messages"]
-                            SessionManager.set("messages", new_messages)
+                            # Existing chat: reload all messages to get the latest
+                            chat_messages = chatbot.get_chat_messages(current_chat_id)
+                            SessionManager.set("messages", chat_messages or [])
+                        
+                        # Refresh chats in sidebar to show the new/updated chat
+                        chats = chatbot.get_chat_collection(user_id)
+                        SessionManager.set("chats", chats)
+                        
+                        st.rerun()
+                        
+                    elif response:
+                        st.error(f"❌ Backend error: {response.get('message', 'Unknown error')}")
                     else:
-                        # Existing chat: just add the new messages
-                        existing_messages = SessionManager.get("messages", [])
-                        new_messages = response["messages"]
-                        # Append only the new messages (avoid duplicates)
-                        all_messages = existing_messages + new_messages
-                        SessionManager.set("messages", all_messages)
-                    
-                    # Refresh chats in sidebar to show the new/updated chat
-                    chats = chatbot.get_chat_collection(user_id)
-                    SessionManager.set("chats", chats)
-                    
-                    st.rerun()
-                else:
-                    st.error("Failed to send message. Please try again.")
+                        st.error("❌ No response from server. Please check if the backend is running.")
+                        
+                except Exception as e:
+                    st.error(f"❌ Connection error: {str(e)}")
         
         # with col2:
             # Stats and info panel

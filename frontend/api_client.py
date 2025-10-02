@@ -86,6 +86,20 @@ class APIClient:
         
         return self._make_request("POST", "/chat/message", json=payload, params=params)
     
+    def send_orchestrated_message(self, user_id: str, message: str, context: Optional[Dict] = None) -> Optional[Dict[str, Any]]:
+        """Send a message using the intelligent orchestrator with database storage"""
+        payload = {
+            "query": message,  # Use 'query' to match DocumentQueryRequest
+            "user_id": user_id
+        }
+        
+        # Extract chat_id from context if provided
+        params = {}
+        if context and context.get("chat_id"):
+            params["chat_id"] = context["chat_id"]
+        
+        return self._make_request("POST", "/orchestrator/chat", json=payload, params=params)
+    
     def get_chat_collection(self, user_id: str) -> List[Dict[str, Any]]:
         """Get all chats for a user"""
         response = self._make_request("GET", "/chat/message/collection", params={"user_id": user_id})
