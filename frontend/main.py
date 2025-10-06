@@ -251,7 +251,7 @@ def run_streamlit_app():
                     st.rerun()
         else:
             # st.success(f"👤 Active User: {user_id[:8]}...")
-            st.success(f"Hello Sonia!")
+            st.success(f"Hello User!")
             
             # if st.button("🔄 New Session"):
             #     # Reset session
@@ -383,13 +383,22 @@ def run_streamlit_app():
             )
             
             if uploaded_file and st.button("📤 Upload Document"):
-                with st.spinner("Uploading document..."):
+                # Check file size and show appropriate message
+                file_size = len(uploaded_file.getvalue()) if hasattr(uploaded_file, 'getvalue') else 0
+                file_size_mb = file_size / (1024 * 1024)
+                
+                if file_size_mb > 1:  # Large files (>1MB)
+                    spinner_text = f"⏳ Processing large document ({file_size_mb:.1f}MB)... This may take a few minutes."
+                else:
+                    spinner_text = "📤 Uploading document..."
+                
+                with st.spinner(spinner_text):
                     result = chatbot.upload_document(user_id, uploaded_file)
                     if result:
                         st.success(f"✅ Document uploaded: {result['filename']}")
                         st.info(f"📊 Created {result['total_chunks']} chunks")
                     else:
-                        st.error("Failed to upload document")
+                        st.error("❌ Failed to upload document")
             
             # Show user documents
             documents = chatbot.get_user_documents(user_id)
@@ -463,10 +472,96 @@ def run_streamlit_app():
         # with col1:
         st.markdown("### 💬 Chat Interface")
         
-        # Show current chat info
+        # Quick Questions Section
+        with st.expander("🎯 **Quick Questions** - Click to ask instantly!", expanded=False):
+            st.markdown("**💫 Popular questions - Click any button to instantly submit the question:**")
+            st.markdown("*These are common questions that users frequently ask. Perfect for getting started!*")
+            
+            # Create columns for better layout
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("🛠️ What are the tools used in CMA CGM?", key="quick_q1", use_container_width=True):
+                    # Set the question in session state to populate input box
+                    SessionManager.set("selected_question", "what are the tools used in cma cgm?")
+                    st.rerun()
+                
+                if st.button("📋 How to open a ticket for Dataiku?", key="quick_q2", use_container_width=True):
+                    SessionManager.set("selected_question", "how to open a ticket for dataiku?")
+                    st.rerun()
+            
+            with col2:
+                if st.button("🌤️ What is the weather in Japan?", key="quick_q3", use_container_width=True):
+                    SessionManager.set("selected_question", "what is the weather in japan?")
+                    st.rerun()
+                
+                if st.button("🎫 How to open an EUP ticket?", key="quick_q4", use_container_width=True):
+                    SessionManager.set("selected_question", "how to open an EUP ticket?")
+                    st.rerun()
+            
+            # Add some styling
+            st.markdown("""
+            <style>
+            .stButton > button {
+                height: 3rem;
+                font-size: 0.9rem;
+                border-radius: 10px;
+                border: 1px solid #e0e0e0;
+                transition: all 0.2s ease;
+            }
+            .stButton > button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            }
+            </style>
+            """, unsafe_allow_html=True)
+        
+        # Show current chat info with editable title (only when editing)
         current_chat_id = SessionManager.get("current_chat_id")
         if current_chat_id:
-            st.info(f"📝 Current Chat: {current_chat_id[:8]}... | Click 'New Chat' to start fresh")
+            # Find current chat details
+            chats = SessionManager.get("chats", [])
+            current_chat = next((chat for chat in chats if chat["chatId"] == current_chat_id), None)
+            
+            if current_chat:
+                # Check if we're editing the current chat title
+                editing_current = SessionManager.get("editing_current_chat_title", False)
+                
+                if editing_current:
+                    # Show inline title editor
+                    with st.form("edit_current_title_form"):
+                        col_title, col_actions = st.columns([3, 1])
+                        
+                        with col_title:
+                            new_title = st.text_input(
+                                "Chat Title:", 
+                                value=current_chat.get("chatTitle", "Untitled Chat"),
+                                key="current_title_input"
+                            )
+                        
+                        with col_actions:
+                            col_save, col_cancel = st.columns(2)
+                            
+                            with col_save:
+                                if st.form_submit_button("💾", help="Save title"):
+                                    if new_title.strip():
+                                        result = chatbot.update_chat_title(current_chat_id, new_title.strip())
+                                        if result:
+                                            st.success("✅ Title updated!")
+                                            # Refresh chats
+                                            chats = chatbot.get_chat_collection(user_id)
+                                            SessionManager.set("chats", chats)
+                                            SessionManager.set("editing_current_chat_title", False)
+                                            st.rerun()
+                                        else:
+                                            st.error("Failed to update title")
+                                    else:
+                                        st.error("Title cannot be empty")
+                            
+                            with col_cancel:
+                                if st.form_submit_button("❌", help="Cancel"):
+                                    SessionManager.set("editing_current_chat_title", False)
+                                    st.rerun()
             
             # Auto-refresh messages if current chat exists but no messages are loaded
             messages = SessionManager.get("messages", [])
@@ -628,19 +723,48 @@ def run_streamlit_app():
                 }, 100);
                 </script>
                 """, unsafe_allow_html=True)
+        else:
+            # Show helpful message when no messages exist
+            current_chat_id = SessionManager.get("current_chat_id")
+            if current_chat_id:
+                st.info("💬 This chat is empty. Send your first message below!")
+            else:
+                st.markdown("""
+                <div style="text-align: center; padding: 2rem; background-color: #f0f2f6; border-radius: 10px; margin: 1rem 0;">
+                    <h3>🚀 Welcome to AI Chat Assistant!</h3>
+                    <p style="margin-bottom: 1rem;">Start a conversation by typing your message below.</p>
+                    <p style="color: #666; font-size: 0.9em;">
+                        💡 <strong>Tip:</strong> Your first message will become the chat title, which you can edit anytime by clicking the ✏️ icon.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
         
+
         # Message input
         st.markdown("---")
         
+        # Check if a quick question was selected
+        selected_question = SessionManager.get("selected_question")
+        if selected_question:
+            # Clear the selected question after using it
+            SessionManager.set("selected_question", None)
+            # Store it in session state for the input field
+            SessionManager.set("input_value", selected_question)
+        
+        # Get the current input value from session state
+        current_input_value = SessionManager.get("input_value", "")
+        
         # Create a form for message input
-        with st.form("message_form", clear_on_submit=True):
+        with st.form("message_form", clear_on_submit=False):
             col_input, col_send = st.columns([4, 1])
             
             with col_input:
                 user_message = st.text_input(
                     "Type your message...", 
                     placeholder="Ask me anything - documents, weather, general questions!",
-                    label_visibility="collapsed"
+                    label_visibility="collapsed",
+                    value=current_input_value,
+                    key="message_input"
                 )
             
             with col_send:
@@ -648,6 +772,9 @@ def run_streamlit_app():
         
         # Handle message sending
         if send_button and user_message:
+            # Clear the input value from session state when sending
+            SessionManager.set("input_value", "")
+            
             if not user_id:
                 st.error("❌ Please start a new session first by clicking '🚀 Start New Session' in the sidebar.")
                 st.stop()

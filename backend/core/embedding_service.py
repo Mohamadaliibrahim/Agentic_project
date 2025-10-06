@@ -54,24 +54,36 @@ class EmbeddingService:
             "Authorization": f"Bearer {self.api_key}"
         }
         
-        batch_size = 10
+        # Use smaller batches for large document sets to avoid timeouts
+        batch_size = 5 if len(texts) > 50 else 10
         all_embeddings = []
+        
+        logger.info(f"Processing {len(texts)} text chunks in batches of {batch_size}")
         
         for i in range(0, len(texts), batch_size):
             batch_texts = texts[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(texts) + batch_size - 1) // batch_size
+            
+            logger.info(f"Processing batch {batch_num}/{total_batches} ({len(batch_texts)} chunks)")
             
             payload = {
                 "model": self.model,
                 "input": batch_texts
             }
             
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    response = await client.post(
-                        self.api_endpoint,
-                        headers=headers,
-                        json=payload
-                    )
+            # Retry logic for failed requests
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # Longer timeout for large documents (2 minutes)
+                    timeout_duration = 120.0
+                    async with httpx.AsyncClient(timeout=timeout_duration) as client:
+                        response = await client.post(
+                            self.api_endpoint,
+                            headers=headers,
+                            json=payload
+                        )
                     
                     if response.status_code == 200:
                         result = response.json()
@@ -89,14 +101,33 @@ class EmbeddingService:
                         raise Exception("Mistral API rate limit exceeded")
                     else:
                         error_text = response.text if hasattr(response, 'text') else str(response.status_code)
-                        raise Exception(f"Mistral API error {response.status_code}: {error_text}")
+                        if attempt < max_retries - 1:
+                            logger.warning(f"Batch {batch_num} failed (attempt {attempt + 1}), retrying...")
+                            continue
+                        else:
+                            raise Exception(f"Mistral API error {response.status_code}: {error_text}")
+                            
+                    # If we get here, the request was successful
+                    break
                         
-            except httpx.TimeoutException:
-                raise Exception("Mistral embedding API request timed out")
-            except httpx.RequestError as e:
-                raise Exception(f"Mistral embedding API request failed: {str(e)}")
-            except json.JSONDecodeError:
-                raise Exception("Mistral embedding API returned invalid JSON")
+                except httpx.TimeoutException:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Batch {batch_num} timed out (attempt {attempt + 1}), retrying...")
+                        continue
+                    else:
+                        raise Exception(f"Mistral embedding API request timed out after {max_retries} attempts")
+                except httpx.RequestError as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Batch {batch_num} request failed (attempt {attempt + 1}), retrying...")
+                        continue
+                    else:
+                        raise Exception(f"Mistral embedding API request failed: {str(e)}")
+                except json.JSONDecodeError:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Batch {batch_num} returned invalid JSON (attempt {attempt + 1}), retrying...")
+                        continue
+                    else:
+                        raise Exception("Mistral embedding API returned invalid JSON")
         
         logger.info(f"Generated {len(all_embeddings)} embeddings using Mistral API")
         return all_embeddings

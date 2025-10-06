@@ -33,5 +33,9 @@ class Settings:
     MISTRAL_MODEL: str = os.getenv("MISTRAL_MODEL", "mistral-small-2503")
     MISTRAL_API_EMBEDDING: str = os.getenv("MISTRAL_API_EMBEDDING", "https://api.mistral.ai/v1/embeddings")
     MISTRAL_EMBEDDING_MODEL: str = os.getenv("MISTRAL_EMBEDDING_MODEL", "codestral-embed")
+    
+    # Weather API configuration
+    OPENWEATHER_API_KEY: str = os.getenv("OPENWEATHER_API_KEY", "")
+    OPENWEATHER_API_URL: str = "https://api.openweathermap.org/data/2.5/weather"
 
 settings = Settings()

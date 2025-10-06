@@ -276,28 +276,29 @@ Answer:"""
         logger.info(f"MESSAGE SAVED TO DATABASE in {db_save_duration:.3f} seconds")
 
         logger.info("UPDATING/CREATING CHAT COLLECTION...")
-        chat_collection_data = {
-            "chat_id": chat_id,
-            "user_id": request.user_id,
-            "chat_title": request.query[:50] + ("..." if len(request.query) > 50 else ""),
-            "creation_date": datetime.utcnow(),
-            "last_message_date": datetime.utcnow(),
-            "message_count": next_message_id,
-            "query_type": "document_query"
-        }
-        
-        logger.info(f"Chat collection data: Title='{chat_collection_data['chat_title']}'")
         existing_collections = await db.get_chat_collections_by_user(request.user_id)
         existing_chat = next((c for c in existing_collections if c.get('chat_id') == chat_id), None)
         
         if existing_chat:
-            logger.info(f"Updating existing chat collection for chat_id: {chat_id}")
+            # For existing chats, only update metadata, NOT the title
+            logger.info(f"Updating existing chat collection for chat_id: {chat_id} (preserving title)")
             await db.update_chat_collection_item(chat_id, {
                 "last_message_date": datetime.utcnow(),
                 "message_count": next_message_id
             })
         else:
-            logger.info(f"Creating new chat collection for chat_id: {chat_id}")
+            # For NEW chats, set the title based on the FIRST message
+            logger.info(f"Creating new chat collection for chat_id: {chat_id} with title from first message")
+            chat_collection_data = {
+                "chat_id": chat_id,
+                "user_id": request.user_id,
+                "chat_title": request.query[:50] + ("..." if len(request.query) > 50 else ""),
+                "creation_date": datetime.utcnow(),
+                "last_message_date": datetime.utcnow(),
+                "message_count": next_message_id,
+                "query_type": "document_query"
+            }
+            logger.info(f"New chat collection data: Title='{chat_collection_data['chat_title']}'")
             await db.store_chat_collection_item(chat_collection_data)
         
         logger.info("PREPARING RESPONSE FOR CLIENT...")

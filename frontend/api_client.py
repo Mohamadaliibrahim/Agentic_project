@@ -197,10 +197,12 @@ class APIClient:
             
             # Use a fresh requests session without custom headers for file upload
             # The session with "Content-Type: application/json" interferes with multipart/form-data
+            # Set a longer timeout for large file uploads (5 minutes)
             response = requests.post(
                 f"{self.base_url}/documents/upload",
                 files=files,
-                data=data
+                data=data,
+                timeout=300.0  # 5 minutes timeout for large documents
             )
             
             if response.status_code == 200:

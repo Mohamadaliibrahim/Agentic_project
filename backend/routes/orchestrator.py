@@ -164,18 +164,19 @@ async def orchestrated_chat_message(
         await db.create_message(message_data)
         
         # Update/create chat collection
+        # IMPORTANT: Chat titles are set ONLY on first message and should NOT be updated on subsequent messages
         try:
             existing_collections = await db.get_chat_collections_by_user(request.user_id)
             existing_chat = next((c for c in existing_collections if c.get('chat_id') == chat_id), None)
             
             if existing_chat:
-                # Update existing chat - preserve creation_date, update other fields
+                # Update existing chat - preserve title and creation_date, update other fields
                 chat_collection_data = {
-                    "chat_title": request.query[:50] + ("..." if len(request.query) > 50 else ""),
                     "last_message_date": datetime.utcnow(),
                     "message_count": next_message_id,
                     "query_type": f"orchestrator_{orchestrator_response.tool_used}"
                 }
+                # DO NOT update chat_title for existing chats - preserve the original title
                 await db.update_chat_collection_item(chat_id, chat_collection_data)
             else:
                 # Create new chat collection
@@ -195,11 +196,11 @@ async def orchestrated_chat_message(
                     if "E11000" in str(insert_error) and "duplicate key" in str(insert_error):
                         logger.warning(f"Chat collection {chat_id} already exists, attempting to update instead")
                         update_data = {
-                            "chat_title": request.query[:50] + ("..." if len(request.query) > 50 else ""),
                             "last_message_date": datetime.utcnow(),
                             "message_count": next_message_id,
                             "query_type": f"orchestrator_{orchestrator_response.tool_used}"
                         }
+                        # DO NOT update chat_title in exception handler - preserve the original title
                         await db.update_chat_collection_item(chat_id, update_data)
                     else:
                         raise insert_error
