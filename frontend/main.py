@@ -48,7 +48,7 @@ except ImportError:
     create_chat_bubble = lambda msg, is_user: f"<div>{msg.get('content', '')}</div>"
     
     config = type('config', (), {
-        'API_BASE_URL': 'http://127.0.0.1:8001',
+        'API_BASE_URL': 'http://127.0.0.1:8011',
         'PAGE_TITLE': '🤖 AI Document Chat Assistant',
         'PAGE_ICON': '🤖'
     })()
@@ -594,23 +594,31 @@ def run_streamlit_app():
                         is_editing = SessionManager.get(edit_key, False)
                         
                         if not is_editing:
-                            # Display normal user message with edit button
-                            col_message, col_edit = st.columns([5, 1])
-                            
-                            with col_message:
-                                st.markdown(f"""
-                                <div class="chat-message user-message">
-                                    <strong>👤 You:</strong> <small style="color: #999; float: right;">Sent: {format_timestamp(timestamp)}</small><br>
-                                    {content}
+                            # Display user message with compact action buttons
+                            st.markdown(f"""
+                            <div class="user-message-container" style="background: #f0f2f6; padding: 15px; border-radius: 10px; margin: 10px 0; position: relative;">
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div style="flex: 1; margin-right: 15px;">
+                                        <strong>👤 You:</strong> <small style="color: #666; margin-left: 10px;">{format_timestamp(timestamp)}</small><br>
+                                        <div style="margin-top: 8px; font-size: 14px; line-height: 1.4;">
+                                            {content}
+                                        </div>
+                                    </div>
                                 </div>
-                                """, unsafe_allow_html=True)
+                            </div>
+                            """, unsafe_allow_html=True)
                             
-                            with col_edit:
-                                if message_id:  # Only show edit button if we have a message_id
-                                    if st.button("✏️", key=f"edit_btn_{message_id}", help="Edit this message"):
+                            # Edit button - clean and user-friendly
+                            if message_id:  # Only show edit button if we have a message_id
+                                col_edit, col_spacer = st.columns([2, 10])
+                                with col_edit:
+                                    if st.button("✏️ Edit Message", key=f"edit_btn_{message_id}", help="Edit and regenerate response", use_container_width=True, type="secondary"):
                                         SessionManager.set(edit_key, True)
                                         SessionManager.set(f"edit_content_{message_id}", content)
                                         st.rerun()
+                            
+                            # Add some spacing after button
+                            st.markdown("<div style='margin-bottom: 15px;'></div>", unsafe_allow_html=True)
                         else:
                             # Show edit form
                             st.markdown("### ✏️ Edit Message")
@@ -740,40 +748,212 @@ def run_streamlit_app():
                 """, unsafe_allow_html=True)
         
 
-        # Message input
-        st.markdown("---")
+        # Add some padding at the bottom to ensure messages aren't hidden behind fixed input
+        st.markdown("<div style='padding-bottom: 150px;'></div>", unsafe_allow_html=True)
+
+    # Fixed message input at bottom of page
+    st.markdown("""
+    <style>
+    .fixed-input-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 2px solid #e6e6e6;
+        padding: 15px 20px;
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        z-index: 999;
+    }
+    
+    /* Adjust for Streamlit's sidebar */
+    @media (min-width: 768px) {
+        .fixed-input-container {
+            left: 21rem; /* Account for sidebar width */
+        }
+    }
+    
+    /* Make sure the input area has proper styling */
+    .fixed-input-container .stForm {
+        margin-bottom: 0 !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Create fixed input container
+    with st.container():
+        st.markdown('<div class="fixed-input-container">', unsafe_allow_html=True)
         
-        # Check if a quick question was selected
+        # Handle selected questions (Quick Questions or message resend)
         selected_question = SessionManager.get("selected_question")
-        if selected_question:
-            # Clear the selected question after using it
-            SessionManager.set("selected_question", None)
-            # Store it in session state for the input field
-            SessionManager.set("input_value", selected_question)
         
-        # Get the current input value from session state
-        current_input_value = SessionManager.get("input_value", "")
+        # Enhanced JavaScript for Enter/Shift+Enter handling that works with Streamlit
+        st.markdown("""
+        <script>
+        // Use a more aggressive approach to ensure the event handler works
+        function setupMessageInputHandler() {
+            // Wait a bit for Streamlit to render the components
+            setTimeout(function() {
+                // Find all textareas (be more flexible with selectors)
+                const textareas = document.querySelectorAll('textarea');
+                
+                textareas.forEach(function(textarea) {
+                    // Check if this textarea is likely our message input
+                    const placeholder = textarea.placeholder || '';
+                    if (placeholder.includes('Ask me anything') || 
+                        textarea.getAttribute('aria-label') === 'Type your message...' ||
+                        textarea.closest('[data-testid="stForm"]')) {
+                        
+                        // Remove existing listeners to avoid duplicates
+                        textarea.removeEventListener('keydown', handleMessageKeyDown);
+                        
+                        // Add our custom handler
+                        textarea.addEventListener('keydown', handleMessageKeyDown);
+                        
+                        // Also add focus styling
+                        textarea.style.border = '2px solid #ccc';
+                        textarea.addEventListener('focus', function() {
+                            this.style.border = '2px solid #0066cc';
+                        });
+                        textarea.addEventListener('blur', function() {
+                            this.style.border = '2px solid #ccc';
+                        });
+                    }
+                });
+            }, 100);
+        }
         
-        # Create a form for message input
-        with st.form("message_form", clear_on_submit=False):
+        function handleMessageKeyDown(event) {
+            if (event.key === 'Enter') {
+                if (event.shiftKey) {
+                    // Shift+Enter: Allow new line (do nothing, let default behavior happen)
+                    return true;
+                } else {
+                    // Enter alone: Submit the form
+                    event.preventDefault();
+                    event.stopPropagation();
+                    
+                    // Find the submit button in the same form
+                    const form = event.target.closest('form') || 
+                                event.target.closest('[data-testid="stForm"]') ||
+                                document.querySelector('[data-testid="stForm"]');
+                    
+                    if (form) {
+                        const submitBtn = form.querySelector('button[kind="primaryFormSubmit"]') ||
+                                        form.querySelector('button[type="submit"]') ||
+                                        form.querySelector('button:contains("Send")') ||
+                                        form.querySelector('.stButton button');
+                        
+                        if (submitBtn) {
+                            submitBtn.click();
+                        }
+                    }
+                    
+                    return false;
+                }
+            }
+        }
+        
+        // Run setup immediately
+        setupMessageInputHandler();
+        
+        // Run setup when DOM changes (Streamlit updates)
+        if (typeof window.messageInputObserver !== 'undefined') {
+            window.messageInputObserver.disconnect();
+        }
+        
+        window.messageInputObserver = new MutationObserver(function(mutations) {
+            let shouldSetup = false;
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    shouldSetup = true;
+                }
+            });
+            if (shouldSetup) {
+                setupMessageInputHandler();
+            }
+        });
+        
+        window.messageInputObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        // Also setup on window load and Streamlit events
+        window.addEventListener('load', setupMessageInputHandler);
+        
+        // Streamlit-specific: Run after Streamlit finishes rendering
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(setupMessageInputHandler, 200);
+        });
+        </script>
+        """, unsafe_allow_html=True)
+
+        # Create a form for message input with enhanced Enter key handling
+        with st.form("message_form", clear_on_submit=True):
+            # Add inline CSS and JavaScript for better Enter key handling
+            st.markdown("""
+            <style>
+            /* Style the message input area */
+            .main-message-input textarea {
+                border: 2px solid #ddd !important;
+                border-radius: 8px !important;
+                font-size: 14px !important;
+            }
+            .main-message-input textarea:focus {
+                border-color: #0066cc !important;
+                box-shadow: 0 0 5px rgba(0,102,204,0.3) !important;
+            }
+            </style>
+            
+            <script>
+            // More targeted approach - run after this specific element loads
+            setTimeout(function() {
+                const messageInput = document.querySelector('textarea[aria-label="main_message_input"]') ||
+                                   document.querySelector('#main_message_input textarea') ||
+                                   document.querySelector('.main-message-input textarea') ||
+                                   document.querySelector('textarea[placeholder*="Ask me anything"]');
+                
+                if (messageInput && !messageInput.hasAttribute('data-enter-setup')) {
+                    messageInput.setAttribute('data-enter-setup', 'true');
+                    messageInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            const submitBtn = document.querySelector('button[kind="primaryFormSubmit"]') ||
+                                            document.querySelector('.stFormSubmitButton button');
+                            if (submitBtn) submitBtn.click();
+                        }
+                    });
+                    console.log('Enter key handler attached successfully');
+                }
+            }, 300);
+            </script>
+            """, unsafe_allow_html=True)
+            
             col_input, col_send = st.columns([4, 1])
             
             with col_input:
-                user_message = st.text_input(
+                # Use selected question as default value
+                user_message = st.text_area(
                     "Type your message...", 
-                    placeholder="Ask me anything - documents, weather, general questions!",
+                    placeholder="Ask me anything - documents, weather, general questions!\n\n💡 Tip: Press Enter to send, Shift+Enter for new line",
+                    height=80,  # Slightly smaller for fixed position
+                    value=selected_question or "",
                     label_visibility="collapsed",
-                    value=current_input_value,
-                    key="message_input"
+                    key="main_message_input",
+                    help="💡 Press Enter to send • Shift+Enter for new line"
                 )
             
             with col_send:
                 send_button = st.form_submit_button("🚀 Send", type="primary", use_container_width=True)
         
+        st.markdown('</div>', unsafe_allow_html=True)
+        
         # Handle message sending
         if send_button and user_message:
-            # Clear the input value from session state when sending
-            SessionManager.set("input_value", "")
+            # Clear selected question when sending
+            if selected_question:
+                SessionManager.set("selected_question", None)
             
             if not user_id:
                 st.error("❌ Please start a new session first by clicking '🚀 Start New Session' in the sidebar.")
@@ -889,7 +1069,7 @@ def run_streamlit_app():
     st.markdown("""
     <div style="text-align: center; color: #666; padding: 1rem;">
         🤖 AI Document Chat Assistant | Built with Streamlit & FastAPI | 
-        <a href="http://127.0.0.1:8001/docs" target="_blank">API Docs</a>
+        <a href="http://127.0.0.1:8011/docs" target="_blank">API Docs</a>
     </div>
     """, unsafe_allow_html=True)
 
