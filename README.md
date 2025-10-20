@@ -16,7 +16,7 @@ A production-ready FastAPI backend with intelligent orchestration, RAG (Retrieva
 - [Project Structure](#project-structure)
 - [Prompt Management](#prompt-management)
 - [Troubleshooting](#troubleshooting)
-- [Contributing](#contributing)
+- [Testing](#testing)
 
 ---
 
@@ -144,37 +144,40 @@ source myvenv/bin/activate
 
 ### Step 5: Install Backend Dependencies
 
+Navigate to the backend folder and install all required Python packages:
+
 ```bash
 cd backend
 pip install -r requirements.txt
 ```
 
+This will install all necessary dependencies including FastAPI, MongoDB drivers, Mistral AI SDK, and more.
+
 ### Step 6: Install Frontend Dependencies (Optional)
+
+If you want to use the Streamlit frontend interface:
 
 ```bash
 cd ../frontend
 pip install -r requirements.txt
+cd ../backend
 ```
 
 ### Step 7: Set Up Environment Variables
 
-Create a `.env` file in the `backend` directory:
-
-```bash
-cd ../backend
-```
+Create a `.env` file in the `backend` directory and add your configuration (see [Environment Variables](#environment-variables) section below).
 
 **On Windows:**
 ```powershell
 New-Item .env -ItemType File
+notepad .env
 ```
 
 **On macOS/Linux:**
 ```bash
 touch .env
+nano .env
 ```
-
-Edit the `.env` file and add your configuration (see [Environment Variables](#environment-variables) section below).
 
 ### Step 8: Start MongoDB
 
@@ -229,228 +232,63 @@ All configuration is centralized in `backend/core/config.py`. You can override a
 
 ## 🔐 Environment Variables
 
-Create a `.env` file in the `backend` directory with the following variables:
-
-### Required Variables
+Create a `.env` file in the `backend` directory with the following required variables:
 
 ```env
 # ============================================
-# REQUIRED - Application will not work without these
+# REQUIRED CONFIGURATION
 # ============================================
 
 # Mistral AI Configuration
 MISTRAL_API_KEY=your_mistral_api_key_here
-# Description: Your Mistral AI API key for LLM calls
+# Your Mistral AI API key for LLM calls
 # Get it from: https://console.mistral.ai/
-# Example: MISTRAL_API_KEY=abc123xyz456
 
 # MongoDB Configuration
 MONGODB_URL=mongodb://localhost:27017
-# Description: MongoDB connection string
-# Local: mongodb://localhost:27017
-# Atlas: mongodb+srv://username:password@cluster.mongodb.net/
+# MongoDB connection string
+# For local: mongodb://localhost:27017
+# For Atlas: mongodb+srv://username:password@cluster.mongodb.net/
 
 DATABASE_NAME=bot_database
-# Description: Name of the MongoDB database
-# Default: bot_database
-# You can change this to any name you prefer
+# Name of the MongoDB database
 
 # OpenWeatherMap API
 OPENWEATHER_API_KEY=your_openweather_api_key_here
-# Description: API key for weather data
+# API key for weather data
 # Get it from: https://openweathermap.org/api
-# Free tier available with 1000 calls/day
-```
 
-### Optional Variables (with defaults)
+# ============================================
+# OPTIONAL CONFIGURATION (with defaults)
+# ============================================
 
-```env
-# ============================================
-# SERVER CONFIGURATION
-# ============================================
+# Server Configuration
+PORT=8011
+# Server port number (default: 8011)
 
 HOST=127.0.0.1
-# Description: Server host address
-# Default: 127.0.0.1 (localhost)
-# Use 0.0.0.0 to allow external access
+# Server host (default: 127.0.0.1)
 
-PORT=8011
-# Description: Server port number
-# Default: 8011
-# Change if port is already in use
-
-RELOAD=true
-# Description: Auto-reload server on code changes
-# Default: true
-# Set to false in production
-
-LOG_LEVEL=info
-# Description: Logging level (debug, info, warning, error)
-# Default: info
-# Use debug for detailed logs
-
-# ============================================
-# DATABASE CONFIGURATION
-# ============================================
-
-DATABASE_TYPE=mongodb
-# Description: Type of database (currently only mongodb supported)
-# Default: mongodb
-
-DATABASE_TIMEOUT_MS=5000
-# Description: Database connection timeout in milliseconds
-# Default: 5000 (5 seconds)
-
-# ============================================
-# MISTRAL AI CONFIGURATION
-# ============================================
-
+# Mistral AI Model Settings
 MISTRAL_MODEL=mistral-small-2503
-# Description: Mistral AI model to use
-# Default: mistral-small-2503
-# Other options: mistral-medium, mistral-large
-
-MISTRAL_EMBEDDING_MODEL=codestral-embed
-# Description: Model for generating embeddings
-# Default: codestral-embed
+# AI model to use (default: mistral-small-2503)
 
 MISTRAL_TEMPERATURE=0.7
-# Description: LLM temperature (0.0-1.0, higher = more creative)
-# Default: 0.7
-# Lower for factual responses, higher for creative
+# LLM temperature 0.0-1.0 (default: 0.7)
 
 MISTRAL_MAX_TOKENS=500
-# Description: Maximum tokens in LLM response
-# Default: 500
-# Increase for longer responses
+# Maximum tokens in response (default: 500)
 
-MISTRAL_MAX_CONTEXT_TOKENS=10000
-# Description: Maximum tokens in conversation context
-# Default: 10000
-
-MISTRAL_API_TIMEOUT=60.0
-# Description: Timeout for Mistral API calls (seconds)
-# Default: 60.0
-
-MISTRAL_EMBEDDING_TIMEOUT=120.0
-# Description: Timeout for embedding generation (seconds)
-# Default: 120.0 (embeddings take longer)
-
-MISTRAL_MAX_RETRIES=3
-# Description: Number of retries for failed API calls
-# Default: 3
-
-MISTRAL_EMBEDDING_BATCH_SIZE_SMALL=5
-# Description: Batch size for embedding large document sets
-# Default: 5
-
-MISTRAL_EMBEDDING_BATCH_SIZE_LARGE=10
-# Description: Batch size for embedding small document sets
-# Default: 10
-
-MISTRAL_EMBEDDING_BATCH_THRESHOLD=50
-# Description: Threshold to switch between small/large batch sizes
-# Default: 50
-
-MISTRAL_STARTUP_TIMEOUT=10.0
-# Description: Timeout for startup health check (seconds)
-# Default: 10.0
-
-MISTRAL_STARTUP_MAX_TOKENS=10
-# Description: Max tokens for startup test
-# Default: 10
-
-# ============================================
-# RAG (Document Search) CONFIGURATION
-# ============================================
-
+# RAG Configuration
 RAG_MAX_CONTEXT_CHUNKS=5
-# Description: Maximum number of document chunks to retrieve
-# Default: 5
-# Increase for more context, decrease for speed
-
-RAG_MAX_CONTEXT_LENGTH=2000
-# Description: Maximum total length of retrieved context
-# Default: 2000 characters
+# Maximum document chunks to retrieve (default: 5)
 
 RAG_CHUNK_SIZE=500
-# Description: Size of text chunks for document splitting
-# Default: 500 characters
-# Smaller = more precise, larger = more context
+# Size of text chunks (default: 500)
 
-RAG_CHUNK_OVERLAP=50
-# Description: Overlap between consecutive chunks
-# Default: 50 characters
-# Helps maintain context across chunk boundaries
-
-# ============================================
-# DOCUMENT UPLOAD CONFIGURATION
-# ============================================
-
+# Upload Configuration
 MAX_UPLOAD_SIZE_MB=10
-# Description: Maximum file upload size in megabytes
-# Default: 10 MB
-# Increase for larger documents
-
-# ============================================
-# WEATHER API CONFIGURATION
-# ============================================
-
-OPENWEATHER_API_URL=https://api.openweathermap.org/data/2.5/weather
-# Description: OpenWeatherMap API endpoint
-# Default: https://api.openweathermap.org/data/2.5/weather
-# Usually no need to change
-
-OPENWEATHER_API_TIMEOUT=30.0
-# Description: Timeout for weather API calls (seconds)
-# Default: 30.0
-
-# ============================================
-# NETWORK CONFIGURATION
-# ============================================
-
-SOCKET_TIMEOUT=1.0
-# Description: Socket timeout for port checking (seconds)
-# Default: 1.0
-
-# ============================================
-# LOGGING CONFIGURATION
-# ============================================
-
-DEBUG_THIRD_PARTY=false
-# Description: Enable debug logging for third-party libraries
-# Default: false
-# Set to true to see all library logs
-
-MINIMAL_LOGGING=true
-# Description: Use minimal logging (less verbose)
-# Default: true
-# Set to false for detailed logs
-
-# ============================================
-# ORCHESTRATOR CONFIGURATION
-# ============================================
-
-STRICT_TOOL_MATCHING=true
-# Description: Require exact tool matches (prevents hallucination)
-# Default: true
-# Set to false to allow LLM to answer general questions
-```
-
-### Example `.env` File
-
-```env
-# Minimum required configuration
-MISTRAL_API_KEY=sk-abc123xyz456def789
-MONGODB_URL=mongodb://localhost:27017
-DATABASE_NAME=bot_database
-OPENWEATHER_API_KEY=1234567890abcdef
-
-# Optional overrides
-PORT=8011
-MISTRAL_TEMPERATURE=0.5
-RAG_MAX_CONTEXT_CHUNKS=10
-LOG_LEVEL=debug
+# Maximum file upload size in MB (default: 10)
 ```
 
 ---
@@ -768,58 +606,3 @@ curl -X POST "http://127.0.0.1:8011/orchestrator/chat" \
   -d '{"user_id": "test", "user_input": "What is 2+2?"}'
 ```
 
----
-
-## 🤝 Contributing
-
-Contributions are welcome! To contribute:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes
-4. Commit: `git commit -m "Add feature"`
-5. Push: `git push origin feature-name`
-6. Create a Pull Request
-
-### Development Guidelines
-- Follow PEP 8 style guide
-- Add docstrings to functions
-- Update prompts.txt for new prompts
-- Test all changes before submitting
-- Update README if adding new features
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
----
-
-## 👥 Authors
-
-- **Mohamad Ali Ibrahim** - [GitHub](https://github.com/Mohamadaliibrahim)
-
----
-
-## 🙏 Acknowledgments
-
-- **Mistral AI** - LLM and embeddings
-- **OpenWeatherMap** - Weather data
-- **FastAPI** - Web framework
-- **MongoDB** - Database
-- **Chromadb** - Vector storage
-- **Streamlit** - Frontend framework
-
----
-
-## 📞 Support
-
-For support:
-- Open an issue on GitHub
-- Check the [API Documentation](http://127.0.0.1:8011/docs)
-- Review logs in `backend/logs/`
-
----
-
-**Happy Coding! 🚀**
