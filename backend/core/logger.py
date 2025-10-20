@@ -49,7 +49,9 @@ class Logger:
     """Centralized logger for the application"""
     
     def __init__(self):
-        self.log_dir = Path("logs")
+        # Use absolute path relative to this file's location
+        current_file_dir = Path(__file__).parent.parent  # backend directory
+        self.log_dir = current_file_dir / "logs"
         self.log_dir.mkdir(exist_ok=True)
         
         # Session tracking to avoid duplicate prompts

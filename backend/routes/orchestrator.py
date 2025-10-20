@@ -1,6 +1,6 @@
 """
 Orchestrator Routes
-API endpoints for the intelligent tool orchestrator
+API endpoints for the new tool-based orchestrator system
 """
 
 import logging
@@ -8,7 +8,8 @@ from typing import Dict, List, Any, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from core.orchestrator import orchestrator, ToolRequest, ToolResponse, ToolType
+# Import the consolidated orchestrator
+from core.orchestrator import orchestrator, OrchestrationRequest, OrchestrationResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -22,8 +23,8 @@ class OrchestratorRequest(BaseModel):
 
 class OrchestratorResponse(BaseModel):
     success: bool
-    tool_used: str
-    result: Any
+    tool_used: Optional[str]
+    result: str
     message: str
     metadata: Optional[Dict[str, Any]] = None
     execution_time: float
@@ -35,49 +36,48 @@ class ToolSuggestion(BaseModel):
     recommended: bool
 
 class AvailableToolsResponse(BaseModel):
-    tools: Dict[str, str]
+    tools: Dict[str, Any]
     total_tools: int
 
 @router.post("/orchestrator/execute", response_model=OrchestratorResponse, tags=["Orchestrator"])
 async def execute_orchestrated_request(request: OrchestratorRequest):
     """
-    Execute a request using the intelligent tool orchestrator
+    Execute a request using the new tool-based orchestrator system
     
     The orchestrator will:
-    1. Analyze the user input to determine intent
-    2. Select the most appropriate tool
-    3. Execute the tool with the given parameters
-    4. Return the results with metadata
+    1. Identify the appropriate tool based on user input
+    2. Execute the tool to get raw data
+    3. Format the response using LLM
+    4. Return the formatted response with metadata
     
     Example requests:
-    - "Search for information about project management in my documents"
-    - "Summarize the main points from the uploaded PDF"
-    - "Analyze my documents and tell me what they contain"
+    - "What's the weather in Paris?"
+    - "Search for information about project management in my documents"  
+    - "Show me arrival notice for shipment CMA123456"
     - "Hello, how are you today?"
     """
     try:
-        # Create tool request
-        tool_request = ToolRequest(
+        # Create orchestration request using new system
+        orchestration_request = OrchestrationRequest(
             user_input=request.user_input,
             user_id=request.user_id,
-            context=request.context or {},
-            parameters=request.parameters or {}
+            context=request.context or {}
         )
         
         # Execute through orchestrator
-        response = await orchestrator.execute_request(tool_request)
+        response = await orchestrator.process_request(orchestration_request)
         
         return OrchestratorResponse(
             success=response.success,
-            tool_used=response.tool_used.value,
-            result=response.result,
-            message=response.message,
+            tool_used=response.tool_used,
+            result=response.response,
+            message="Request processed successfully" if response.success else "Request processing failed",
             metadata=response.metadata,
             execution_time=response.execution_time
         )
         
     except Exception as e:
-        logger.error(f"Orchestrator execution failed: {str(e)}")
+        logger.error(f"New orchestrator execution failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Orchestrator execution failed: {str(e)}"
@@ -97,13 +97,13 @@ async def orchestrated_chat_message(
     chat_id: Optional[str] = Query(None, description="Optional chat ID for continuing existing conversations")
 ):
     """
-    Send a message through the intelligent orchestrator AND save to database
+    Send a message through the new tool-based orchestrator AND save to database
     
     This combines the orchestrator's intelligence with proper message persistence.
-    Works exactly like the old /chat/message endpoint but uses orchestrator routing.
+    Works exactly like the old /chat/message endpoint but uses new orchestrator routing.
     
     Features:
-    - Intelligent routing (weather, documents, chat, etc.)  
+    - Intelligent tool routing (weather, documents, chat, etc.)  
     - Message persistence in MongoDB
     - Chat history support
     - Proper response formatting for frontend
@@ -119,21 +119,20 @@ async def orchestrated_chat_message(
         # Record timestamps
         message_sent_timestamp = datetime.utcnow()
         
-        # Create tool request for orchestrator
-        tool_request = ToolRequest(
+        # Create orchestration request using new system
+        orchestration_request = OrchestrationRequest(
             user_input=request.query,
             user_id=request.user_id,
-            context={"chat_id": chat_id} if chat_id else {},
-            parameters={}
+            context={"chat_id": chat_id} if chat_id else {}
         )
         
         # Execute through orchestrator
-        orchestrator_response = await orchestrator.execute_request(tool_request)
+        orchestrator_response = await orchestrator.process_request(orchestration_request)
         
         if not orchestrator_response.success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Orchestrator failed: {orchestrator_response.message}"
+                detail=f"Orchestrator failed: {orchestrator_response.response}"
             )
         
         answer_received_timestamp = datetime.utcnow()
@@ -143,8 +142,8 @@ async def orchestrated_chat_message(
         next_message_id = await db.get_next_message_id_for_chat(chat_id)
         
         # Format the result 
-        final_answer = str(orchestrator_response.result)
-        tool_info = f" [Tool: {orchestrator_response.tool_used}]"
+        final_answer = str(orchestrator_response.response)
+        tool_info = f" [Tool: {orchestrator_response.tool_used}]" if orchestrator_response.tool_used else ""
         
         message_data = {
             "message_id": str(next_message_id),
@@ -153,7 +152,7 @@ async def orchestrated_chat_message(
             "date": datetime.utcnow(),
             "user_message": request.query,
             "assistant_message": final_answer + tool_info,
-            "query_type": f"orchestrator_{orchestrator_response.tool_used}",
+            "query_type": f"orchestrator_{orchestrator_response.tool_used or 'general'}",
             "source_chunks": [],  # Could be populated for semantic_search tool
             "message_sent_timestamp": message_sent_timestamp,
             "answer_received_timestamp": answer_received_timestamp,
@@ -187,7 +186,7 @@ async def orchestrated_chat_message(
                     "creation_date": datetime.utcnow(),
                     "last_message_date": datetime.utcnow(),
                     "message_count": next_message_id,
-                    "query_type": f"orchestrator_{orchestrator_response.tool_used}"
+                    "query_type": f"orchestrator_{orchestrator_response.tool_used or 'general'}"
                 }
                 try:
                     await db.store_chat_collection_item(chat_collection_data)
@@ -198,7 +197,7 @@ async def orchestrated_chat_message(
                         update_data = {
                             "last_message_date": datetime.utcnow(),
                             "message_count": next_message_id,
-                            "query_type": f"orchestrator_{orchestrator_response.tool_used}"
+                            "query_type": f"orchestrator_{orchestrator_response.tool_used or 'general'}"
                         }
                         # DO NOT update chat_title in exception handler - preserve the original title
                         await db.update_chat_collection_item(chat_id, update_data)
@@ -236,82 +235,20 @@ async def orchestrated_chat_message(
             detail=f"Orchestrated chat message failed: {str(e)}"
         )
 
-@router.post("/orchestrator/analyze", response_model=List[ToolSuggestion], tags=["Orchestrator"])
-async def analyze_request_intent(request: OrchestratorRequest):
-    """
-    Analyze user input and get tool suggestions without executing
-    
-    This endpoint helps you understand:
-    - Which tools could handle the request
-    - Confidence scores for each tool
-    - Recommended tools based on the analysis
-    
-    Useful for debugging and understanding the orchestrator's decision-making process.
-    """
-    try:
-        # Create tool request
-        tool_request = ToolRequest(
-            user_input=request.user_input,
-            user_id=request.user_id,
-            context=request.context or {},
-            parameters=request.parameters or {}
-        )
-        
-        # Get tool suggestions
-        suggestions = await orchestrator.get_tool_suggestions(tool_request)
-        
-        return [
-            ToolSuggestion(
-                tool_type=suggestion["tool_type"],
-                description=suggestion["description"],
-                confidence=suggestion["confidence"],
-                recommended=suggestion["recommended"]
-            )
-            for suggestion in suggestions
-        ]
-        
-    except Exception as e:
-        logger.error(f"Intent analysis failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Intent analysis failed: {str(e)}"
-        )
 
-@router.get("/orchestrator/tools", response_model=AvailableToolsResponse, tags=["Orchestrator"])
-async def get_available_tools():
-    """
-    Get list of all available tools and their descriptions
-    
-    Returns information about:
-    - Tool types and their capabilities
-    - What each tool is designed to handle
-    - Total number of available tools
-    """
-    try:
-        tools = orchestrator.get_available_tools()
-        
-        return AvailableToolsResponse(
-            tools=tools,
-            total_tools=len(tools)
-        )
-        
-    except Exception as e:
-        logger.error(f"Failed to get available tools: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get available tools: {str(e)}"
-        )
 
-@router.post("/orchestrator/chat", response_model=OrchestratorResponse, tags=["Orchestrator"])
-async def orchestrated_chat(request: OrchestratorRequest):
+
+
+@router.post("/orchestrator/simple-chat", response_model=OrchestratorResponse, tags=["Orchestrator"])
+async def orchestrated_simple_chat(request: OrchestratorRequest):
     """
-    Simplified chat interface using the orchestrator
+    Simplified chat interface using the new tool-based orchestrator
     
     This is a more user-friendly endpoint for chat applications.
     It automatically handles:
-    - Intent detection
-    - Tool selection
-    - Conversation context
+    - Intent detection using new tool system
+    - Tool selection and execution
+    - LLM response formatting
     - Error handling
     
     Perfect for integrating with chat UIs or conversational interfaces.
@@ -324,16 +261,15 @@ async def orchestrated_chat(request: OrchestratorRequest):
         if "conversation_history" not in enhanced_context:
             enhanced_context["conversation_history"] = []
         
-        # Create tool request
-        tool_request = ToolRequest(
+        # Create orchestration request using new system
+        orchestration_request = OrchestrationRequest(
             user_input=request.user_input,
             user_id=request.user_id,
-            context=enhanced_context,
-            parameters=request.parameters or {}
+            context=enhanced_context
         )
         
         # Execute through orchestrator
-        response = await orchestrator.execute_request(tool_request)
+        response = await orchestrator.process_request(orchestration_request)
         
         # Add helpful metadata for chat interfaces
         if response.metadata is None:
@@ -347,15 +283,15 @@ async def orchestrated_chat(request: OrchestratorRequest):
         
         return OrchestratorResponse(
             success=response.success,
-            tool_used=response.tool_used.value,
-            result=response.result,
-            message=response.message,
+            tool_used=response.tool_used,
+            result=response.response,
+            message="Chat processed successfully" if response.success else "Chat processing failed",
             metadata=response.metadata,
             execution_time=response.execution_time
         )
         
     except Exception as e:
-        logger.error(f"Orchestrated chat failed: {str(e)}")
+        logger.error(f"Orchestrated simple chat failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Chat request failed: {str(e)}"
