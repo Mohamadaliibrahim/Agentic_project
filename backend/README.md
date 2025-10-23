@@ -17,10 +17,42 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Start MongoDB (choose one):
+Install and start MongoDB (choose one option):
+
+**Option 1: Windows Local Installation**
 ```powershell
-#net start MongoDB
+# Install via Chocolatey (if not installed: https://chocolatey.org/install)
+choco install mongodb
+
+# Start MongoDB service
+net start MongoDB
 ```
+
+**Option 2: macOS Local Installation**
+```bash
+# Install via Homebrew
+brew tap mongodb/brew
+brew install mongodb-community
+
+# Start MongoDB
+brew services start mongodb-community
+```
+
+**Option 3: Linux Local Installation**
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y mongodb
+
+# Start MongoDB
+sudo systemctl start mongod
+sudo systemctl enable mongod
+```
+
+**Option 4: MongoDB Atlas (Cloud - Free tier available)**
+- Sign up at https://www.mongodb.com/cloud/atlas
+- Create free cluster and get connection string
+- Use connection string in `.env` file
 
 Create `.env` file in `backend/` folder with required keys:
 ```env
