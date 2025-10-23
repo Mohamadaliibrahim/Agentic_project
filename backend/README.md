@@ -19,14 +19,7 @@ pip install -r requirements.txt
 
 Start MongoDB (choose one):
 ```powershell
-# Option 1: Docker (recommended)
-docker run -d -p 27017:27017 --name mongo mongo:6
-
-# Option 2: Local Windows service
-net start MongoDB
-
-# Option 3: Cloud MongoDB Atlas
-# Use connection string in .env
+#net start MongoDB
 ```
 
 Create `.env` file in `backend/` folder with required keys:
