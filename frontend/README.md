@@ -17,11 +17,6 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Create `.env` file in `frontend/` folder:
-```env
-API_BASE_URL=http://127.0.0.1:8011
-```
-
 **Important:** Start the backend first (see backend README), then run:
 ```powershell
 streamlit run main.py
