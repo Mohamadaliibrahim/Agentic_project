@@ -76,19 +76,3 @@ frontend/
 ├── utils.py         # Utility functions
 └── requirements.txt # Python dependencies
 ```
-
-## Troubleshooting
-
-**Backend connection failed:** Ensure backend is running at the URL specified in `API_BASE_URL`
-
-**Module not found:** `pip install -r requirements.txt`
-
-**Port already in use:** Streamlit will auto-assign a new port (default: 8501)
-
-**File upload fails:** Check file size < `MAX_FILE_SIZE_MB` and type in `SUPPORTED_FILE_TYPES`
-
-## Support
-
-Issues: https://github.com/Mohamadaliibrahim/fastapi_mini_project/issues
-
-License: MIT — Copyright (c) 2025 Mohamad Ali Ibrahim
