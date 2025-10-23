@@ -19,7 +19,7 @@ pip install -r requirements.txt
 
 **Important:** Start the backend first (see backend README), then run:
 ```powershell
-streamlit run main.py
+python main.py
 ```
 
 Visit http://localhost:8501 in your browser.
