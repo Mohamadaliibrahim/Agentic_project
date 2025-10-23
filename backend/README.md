@@ -1,389 +1,775 @@
-# Assistant Chatbot Backend# Assistant Chatbot Backend
+# Assistant Chatbot# Assistant Chatbot 
 
 
 
-FastAPI-based intelligent chatbot backend with LLM-powered orchestration, RAG document search, and weather query capabilities.FastAPI intelligent chatbot backend with LLM orchestration, RAG document search, and weather queries.
+FastAPI-based intelligent chatbot backend with LLM-powered orchestration, RAG document search, and weather query capabilities.
 
 
 
-## Table of Contents## Description
+---FastAPI-based intelligent chatbot backend with LLM-powered orchestration, RAG document search, and weather query capabilities.FastAPI intelligent chatbot backend with LLM orchestration, RAG document search, and weather queries.
 
 
 
-- [Introduction](#introduction)Intelligent assistant backend using Mistral AI to route queries to appropriate tools:
+## Table of Contents
 
-- [Features](#features)- **Weather Tool**: Real-time weather via OpenWeatherMap
 
-- [Prerequisites](#prerequisites)- **RAG Tool**: Semantic document search with vector embeddings
+
+* [Introduction](#introduction)## Table of Contents# Description
+
+* [Features](#features)
+
+* [Prerequisites](#prerequisites)
+
+* [Installation](#installation)
+
+* [Configuration](#configuration)- [Introduction](#introduction)Intelligent assistant backend using Mistral AI to route queries to appropriate tools:
+
+* [Environment Variables](#environment-variables)
+
+* [Usage](#usage)- [Features](#features)- **Weather Tool**: Real-time weather via OpenWeatherMap
+
+* [API Documentation](#api-documentation)
+
+* [Manual Deployment](#manual-deployment)- [Prerequisites](#prerequisites)- **RAG Tool**: Semantic document search with vector embeddings
+
+* [License](#license)
 
 - [Installation](#installation)- **Anti-Hallucination**: Returns "I don't know" for out-of-scope queries
 
+---
+
 - [Configuration](#configuration)
+
+## Introduction
 
 - [Environment Variables](#environment-variables)## Installation
 
-- [Usage](#usage)
+This backend service is the core engine of an intelligent assistant chatbot system.
 
-- [API Documentation](#api-documentation)**Requirements:** Python 3.12+, MongoDB, API Keys ([Mistral AI](https://console.mistral.ai/), [OpenWeatherMap](https://openweathermap.org/api))
+It uses Large Language Models (LLM) from Mistral AI to intelligently route user queries to appropriate tools, search through uploaded documents using semantic embeddings (RAG - Retrieval-Augmented Generation), and provide real-time weather information.- [Usage](#usage)
 
-- [Manual Deployment](#manual-deployment)
 
-```bash
 
----git clone https://github.com/Mohamadaliibrahim/fastapi_mini_project.git
+### What This Project Does- [API Documentation](#api-documentation)**Requirements:** Python 3.12+, MongoDB, API Keys ([Mistral AI](https://console.mistral.ai/), [OpenWeatherMap](https://openweathermap.org/api))
 
-cd fastapi_mini_project/backend
+
+
+**Backend Purpose:**- [Manual Deployment](#manual-deployment)
+
+
+
+* Acts as the API server for the chatbot system```bash
+
+* Receives user queries and intelligently determines which tool should handle them
+
+* Manages user accounts and conversation history in MongoDB---git clone https://github.com/Mohamadaliibrahim/fastapi_mini_project.git
+
+* Processes document uploads and creates vector embeddings for semantic search
+
+* Provides weather information through OpenWeatherMap API integrationcd fastapi_mini_project/backend
+
+* Prevents AI hallucination by limiting responses to available tool capabilities
 
 ## Introductionpython -m venv ..\myvenv
 
-..\myvenv\Scripts\Activate.ps1  # Windows, or source ../myvenv/bin/activate for Linux/Mac
-
-This backend service is the core engine of an intelligent assistant chatbot system. It uses Large Language Models (LLM) from Mistral AI to intelligently route user queries to appropriate tools, search through uploaded documents using semantic embeddings (RAG - Retrieval-Augmented Generation), and provide real-time weather information.pip install -r requirements.txt
-
-```
-
-### What This Project Does
-
-Create `.env` file:
-
-**Backend Purpose:**```env
-
-- Acts as the API server for the chatbot systemMISTRAL_API_KEY=your_key
-
-- Receives user queries and intelligently determines which tool should handle themMONGODB_URL=mongodb://localhost:27017
-
-- Manages user accounts and conversation history in MongoDBDATABASE_NAME=bot_database
-
-- Processes document uploads and creates vector embeddings for semantic searchOPENWEATHER_API_KEY=your_key
-
-- Provides weather information through OpenWeatherMap API integration```
-
-- Prevents AI hallucination by limiting responses to available tool capabilities
-
-Run: `python startup.py`
-
 **Architecture Flow:**
 
-1. User sends a query through the API**Access:** http://127.0.0.1:8011 | **Docs:** http://127.0.0.1:8011/docs
+..\myvenv\Scripts\Activate.ps1  # Windows, or source ../myvenv/bin/activate for Linux/Mac
 
-2. Orchestrator uses Mistral AI to analyze the query
+1. User sends a query through the API
 
-3. System selects appropriate tool (Weather, RAG Document Search, or None)## API Endpoints
+2. Orchestrator uses Mistral AI to analyze the queryThis backend service is the core engine of an intelligent assistant chatbot system. It uses Large Language Models (LLM) from Mistral AI to intelligently route user queries to appropriate tools, search through uploaded documents using semantic embeddings (RAG - Retrieval-Augmented Generation), and provide real-time weather information.pip install -r requirements.txt
 
-4. Tool executes and returns data
+3. System selects appropriate tool (Weather, RAG Document Search, or None)
+
+4. Tool executes and returns data```
+
+5. Mistral AI formats the response in natural language
+
+6. Response is returned to the user### What This Project Does
+
+
+
+---Create `.env` file:
+
+
+
+## Features**Backend Purpose:**```env
+
+
+
+* **🤖 Intelligent Tool Selection** – LLM automatically determines which tool to use based on user intent- Acts as the API server for the chatbot systemMISTRAL_API_KEY=your_key
+
+* **📄 RAG Document Search** – Upload documents and search through them using semantic vector embeddings
+
+* **🌤️ Weather Queries** – Get real-time weather information for any location worldwide- Receives user queries and intelligently determines which tool should handle themMONGODB_URL=mongodb://localhost:27017
+
+* **🚫 Anti-Hallucination** – System returns "I don't know" for queries outside its tool scope
+
+* **📝 Centralized Prompt Management** – All LLM prompts stored in `prompts.txt` for easy editing- Manages user accounts and conversation history in MongoDBDATABASE_NAME=bot_database
+
+* **⚙️ Zero Hardcoding** – All configurations managed through environment variables
+
+* **📊 Comprehensive Logging** – Detailed logs for debugging, errors, and LLM interactions- Processes document uploads and creates vector embeddings for semantic searchOPENWEATHER_API_KEY=your_key
+
+* **🗄️ MongoDB Integration** – Persistent storage for users, messages, and conversations
+
+* **⚡ Async Processing** – High-performance async/await architecture with FastAPI- Provides weather information through OpenWeatherMap API integration```
+
+
+
+---- Prevents AI hallucination by limiting responses to available tool capabilities
+
+
+
+## PrerequisitesRun: `python startup.py`
+
+
+
+Before setting up the project, ensure you have the following:**Architecture Flow:**
+
+
+
+### Required Software1. User sends a query through the API**Access:** http://127.0.0.1:8011 | **Docs:** http://127.0.0.1:8011/docs
+
+
+
+* **Python 3.12 or higher:** [Download Python](https://www.python.org/downloads/)2. Orchestrator uses Mistral AI to analyze the query
+
+* **MongoDB:**
+
+  * Local: [Download MongoDB Community Server](https://www.mongodb.com/try/download/community)3. System selects appropriate tool (Weather, RAG Document Search, or None)## API Endpoints
+
+  * Cloud: [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)
+
+* **Git** for cloning the repository4. Tool executes and returns data
+
+* **pip** (comes with Python)
 
 5. Mistral AI formats the response in natural language- **Users:** POST/GET `/api/users/`, GET `/api/users/{id}`
 
+### Required API Keys
+
 6. Response is returned to the user- **Documents:** POST `/api/documents/upload`, GET `/api/documents/user/{id}`, DELETE `/api/documents/{id}`
 
-- **Chat:** POST `/api/messages/`, GET `/api/messages/user/{id}`, POST `/api/orchestrator/query`
+1. **Mistral AI API Key** – Get from [console.mistral.ai](https://console.mistral.ai/)
 
----
+2. **OpenWeatherMap API Key** – Get from [openweathermap.org/api](https://openweathermap.org/api)- **Chat:** POST `/api/messages/`, GET `/api/messages/user/{id}`, POST `/api/orchestrator/query`
 
-## Configuration
 
-## Features
+
+### System Requirements---
+
+
+
+* OS: Windows, macOS, or Linux## Configuration
+
+* RAM: 4GB (8GB recommended)
+
+* Disk: 500MB free## Features
+
+* Internet connection required
 
 **Required:**
 
+---
+
 - **🤖 Intelligent Tool Selection**: LLM automatically determines which tool to use based on user intent```env
-
-- **📄 RAG Document Search**: Upload documents and search through them using semantic vector embeddingsMISTRAL_API_KEY, MONGODB_URL, DATABASE_NAME, OPENWEATHER_API_KEY
-
-- **🌤️ Weather Queries**: Get real-time weather information for any location worldwide```
-
-- **🚫 Anti-Hallucination**: System returns "I don't know" for queries outside its tool scope
-
-- **📝 Centralized Prompt Management**: All LLM prompts stored in `prompts.txt` for easy editing**Optional (defaults):**
-
-- **⚙️ Zero Hardcoding**: All configurations managed through environment variables```env
-
-- **📊 Comprehensive Logging**: Detailed logs for debugging, errors, and LLM interactionsPORT=8011, MISTRAL_TEMPERATURE=0.7, MISTRAL_MAX_TOKENS=500, RAG_CHUNK_SIZE=500
-
-- **🗄️ MongoDB Integration**: Persistent storage for users, messages, and conversations```
-
-- **⚡ Async Processing**: High-performance async/await architecture with FastAPI
-
-## Project Structure
-
----
-
-```
-
-## Prerequisitesbackend/
-
- startup.py, main.py, prompts.txt
-
-Before setting up the project, ensure you have the following: core/ (orchestrator.py, mistral_service.py, rag_service.py, bot_tools/)
-
- database/ (mongodb_adapter.py)
-
-### Required Software routes/ (users.py, documents.py, messages.py)
-
-- **Python 3.12 or higher**: [Download Python](https://www.python.org/downloads/) logs/
-
-- **MongoDB**: Either local installation or MongoDB Atlas account```
-
-  - Local: [Download MongoDB Community Server](https://www.mongodb.com/try/download/community)
-
-  - Cloud: [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)## Troubleshooting
-
-- **Git**: For cloning the repository
-
-- **pip**: Python package manager (comes with Python)- **Port in use:** Change `PORT` in `.env`
-
-- **MongoDB failed:** `net start MongoDB` (Windows) or `brew services start mongodb-community` (Mac)
-
-### Required API Keys- **Module not found:** `pip install -r requirements.txt`
-
-1. **Mistral AI API Key**- **Check logs:** `logs/error.txt`, `logs/debug.txt`
-
-   - Sign up at [console.mistral.ai](https://console.mistral.ai/)
-
-   - Navigate to API Keys section## License
-
-   - Create a new API key
-
-   - Copy and save it securelyMIT License - Copyright (c) 2025 Mohamad Ali Ibrahim
-
-
-2. **OpenWeatherMap API Key**
-   - Sign up at [openweathermap.org](https://openweathermap.org/api)
-   - Free tier is sufficient for development
-   - Navigate to API Keys section
-   - Copy your API key
-
-### System Requirements
-- **Operating System**: Windows, macOS, or Linux
-- **RAM**: Minimum 4GB (8GB recommended)
-- **Disk Space**: At least 500MB free space
-- **Internet Connection**: Required for API calls and package installation
-
----
 
 ## Installation
 
-Follow these step-by-step instructions to set up the project locally.
+- **📄 RAG Document Search**: Upload documents and search through them using semantic vector embeddingsMISTRAL_API_KEY, MONGODB_URL, DATABASE_NAME, OPENWEATHER_API_KEY
 
 ### Step 1: Clone the Repository
 
-```bash
-git clone https://github.com/Mohamadaliibrahim/fastapi_mini_project.git
-```
-
-**What this does:** Downloads the entire project codebase to your local machine.
-
-### Step 2: Navigate to the Backend Directory
+- **🌤️ Weather Queries**: Get real-time weather information for any location worldwide```
 
 ```bash
-cd fastapi_mini_project/backend
+
+git clone https://github.com/Mohamadaliibrahim/fastapi_mini_project.git- **🚫 Anti-Hallucination**: System returns "I don't know" for queries outside its tool scope
+
 ```
 
-**What this does:** Changes your current directory to the backend folder where all backend code resides.
+- **📝 Centralized Prompt Management**: All LLM prompts stored in `prompts.txt` for easy editing**Optional (defaults):**
 
-### Step 3: Create a Virtual Environment
+### Step 2: Navigate to Backend
 
-**On Windows:**
+- **⚙️ Zero Hardcoding**: All configurations managed through environment variables```env
+
+```bash
+
+cd fastapi_mini_project/backend- **📊 Comprehensive Logging**: Detailed logs for debugging, errors, and LLM interactionsPORT=8011, MISTRAL_TEMPERATURE=0.7, MISTRAL_MAX_TOKENS=500, RAG_CHUNK_SIZE=500
+
+```
+
+- **🗄️ MongoDB Integration**: Persistent storage for users, messages, and conversations```
+
+### Step 3: Create Virtual Environment
+
+- **⚡ Async Processing**: High-performance async/await architecture with FastAPI
+
+**Windows:**
+
+## Project Structure
+
 ```powershell
-python -m venv ..\myvenv
+
+python -m venv ..\myvenv---
+
 ```
 
-**On macOS/Linux:**
+```
+
+**macOS/Linux:**
+
+## Prerequisitesbackend/
+
 ```bash
-python3 -m venv ../myvenv
+
+python3 -m venv ../myvenv startup.py, main.py, prompts.txt
+
 ```
 
-**What this does:** Creates an isolated Python environment called `myvenv` in the parent directory. This keeps project dependencies separate from your system Python installation.
+Before setting up the project, ensure you have the following: core/ (orchestrator.py, mistral_service.py, rag_service.py, bot_tools/)
 
-### Step 4: Activate the Virtual Environment
+### Step 4: Activate Environment
 
-**On Windows (PowerShell):**
+ database/ (mongodb_adapter.py)
+
+**Windows (PowerShell):**
+
+### Required Software routes/ (users.py, documents.py, messages.py)
+
 ```powershell
-..\myvenv\Scripts\Activate.ps1
+
+..\myvenv\Scripts\Activate.ps1- **Python 3.12 or higher**: [Download Python](https://www.python.org/downloads/) logs/
+
 ```
 
-**On Windows (Command Prompt):**
-```cmd
-..\myvenv\Scripts\activate.bat
-```
+- **MongoDB**: Either local installation or MongoDB Atlas account```
 
-**On macOS/Linux:**
+**macOS/Linux:**
+
+  - Local: [Download MongoDB Community Server](https://www.mongodb.com/try/download/community)
+
 ```bash
-source ../myvenv/bin/activate
+
+source ../myvenv/bin/activate  - Cloud: [MongoDB Atlas](https://www.mongodb.com/cloud/atlas)## Troubleshooting
+
 ```
 
-**What this does:** Activates the virtual environment. You'll see `(myvenv)` prefix in your terminal prompt, indicating the environment is active.
+- **Git**: For cloning the repository
 
 ### Step 5: Install Dependencies
 
+- **pip**: Python package manager (comes with Python)- **Port in use:** Change `PORT` in `.env`
+
 ```bash
-pip install -r requirements.txt
+
+pip install -r requirements.txt- **MongoDB failed:** `net start MongoDB` (Windows) or `brew services start mongodb-community` (Mac)
+
 ```
 
-**What this does:** Installs all required Python packages listed in `requirements.txt`, including:
-- **FastAPI**: Web framework for building APIs
-- **Uvicorn**: ASGI server for running FastAPI
-- **Motor**: Async MongoDB driver
-- **Mistralai**: Mistral AI SDK for LLM integration
-- **Chromadb**: Vector database for embeddings
-- **LangChain**: Document processing and text splitting
-- **httpx**: HTTP client for API requests
-- **python-dotenv**: Environment variable management
-- And many more dependencies...
+### Required API Keys- **Module not found:** `pip install -r requirements.txt`
 
-### Step 6: Set Up MongoDB
+### Step 6: Run MongoDB
 
-Ensure MongoDB is running on your system.
+1. **Mistral AI API Key**- **Check logs:** `logs/error.txt`, `logs/debug.txt`
 
-**On Windows:**
-```powershell
-net start MongoDB
-```
-
-**On macOS:**
 ```bash
-brew services start mongodb-community
+
+net start MongoDB  # Windows   - Sign up at [console.mistral.ai](https://console.mistral.ai/)
+
+brew services start mongodb-community  # macOS
+
+sudo systemctl start mongod  # Linux   - Navigate to API Keys section## License
+
 ```
 
-**On Linux:**
-```bash
-sudo systemctl start mongod
-```
-
-**What this does:** Starts the MongoDB service so the application can connect to the database.
+   - Create a new API key
 
 ### Step 7: Configure Environment Variables
 
-Create a `.env` file in the `backend` directory:
+   - Copy and save it securelyMIT License - Copyright (c) 2025 Mohamad Ali Ibrahim
+
+Create a `.env` file and add:
+
+
+
+```env2. **OpenWeatherMap API Key**
+
+MISTRAL_API_KEY=your_key   - Sign up at [openweathermap.org](https://openweathermap.org/api)
+
+MONGODB_URL=mongodb://localhost:27017   - Free tier is sufficient for development
+
+DATABASE_NAME=bot_database   - Navigate to API Keys section
+
+OPENWEATHER_API_KEY=your_key   - Copy your API key
+
+```
+
+### System Requirements
+
+### Step 8: Run the Application- **Operating System**: Windows, macOS, or Linux
+
+- **RAM**: Minimum 4GB (8GB recommended)
+
+```bash- **Disk Space**: At least 500MB free space
+
+python startup.py- **Internet Connection**: Required for API calls and package installation
+
+```
+
+---
+
+**Access:**
+
+## Installation
+
+* API: [http://127.0.0.1:8011](http://127.0.0.1:8011)
+
+* Docs: [http://127.0.0.1:8011/docs](http://127.0.0.1:8011/docs)Follow these step-by-step instructions to set up the project locally.
+
+
+
+---### Step 1: Clone the Repository
+
+
+
+## Configuration```bash
+
+git clone https://github.com/Mohamadaliibrahim/fastapi_mini_project.git
+
+All configuration is centralized in `core/config.py` and the `.env` file.```
+
+
+
+---**What this does:** Downloads the entire project codebase to your local machine.
+
+
+
+## Environment Variables### Step 2: Navigate to the Backend Directory
+
+
+
+### Required```bash
+
+cd fastapi_mini_project/backend
+
+```env```
+
+MISTRAL_API_KEY=your_mistral_api_key_here
+
+MONGODB_URL=mongodb://localhost:27017**What this does:** Changes your current directory to the backend folder where all backend code resides.
+
+DATABASE_NAME=bot_database
+
+OPENWEATHER_API_KEY=your_openweather_api_key_here### Step 3: Create a Virtual Environment
+
+```
 
 **On Windows:**
-```powershell
-New-Item .env -ItemType File
-notepad .env
-```
+
+**MISTRAL_API_KEY** – Authenticates requests to Mistral AI API  ```powershell
+
+**MONGODB_URL** – Database connection string (local or Atlas)  python -m venv ..\myvenv
+
+**DATABASE_NAME** – MongoDB database name  ```
+
+**OPENWEATHER_API_KEY** – Enables weather queries
 
 **On macOS/Linux:**
-```bash
-touch .env
-nano .env
+
+### Optional (with defaults)```bash
+
+python3 -m venv ../myvenv
+
+```env```
+
+PORT=8011
+
+MISTRAL_TEMPERATURE=0.7**What this does:** Creates an isolated Python environment called `myvenv` in the parent directory. This keeps project dependencies separate from your system Python installation.
+
+MISTRAL_MAX_TOKENS=500
+
+RAG_CHUNK_SIZE=500### Step 4: Activate the Virtual Environment
+
 ```
+
+**On Windows (PowerShell):**
+
+**PORT** – Server port (default: 8011)  ```powershell
+
+**MISTRAL_TEMPERATURE** – LLM creativity (0.0-1.0, default: 0.7)  ..\myvenv\Scripts\Activate.ps1
+
+**MISTRAL_MAX_TOKENS** – Max response length (default: 500)  ```
+
+**RAG_CHUNK_SIZE** – Document chunk size (default: 500 chars)
+
+**On Windows (Command Prompt):**
+
+#### Complete Configuration Options```cmd
+
+..\myvenv\Scripts\activate.bat
+
+**Server:**```
+
+
+
+* `HOST` – Server address (default: 127.0.0.1)**On macOS/Linux:**
+
+* `PORT` – Server port (default: 8011)```bash
+
+* `RELOAD` – Auto-reload on changes (default: true)source ../myvenv/bin/activate
+
+* `LOG_LEVEL` – Logging level (default: info)```
+
+
+
+**Mistral AI:****What this does:** Activates the virtual environment. You'll see `(myvenv)` prefix in your terminal prompt, indicating the environment is active.
+
+
+
+* `MISTRAL_API_KEY` – API key (required)### Step 5: Install Dependencies
+
+* `MISTRAL_API_ENDPOINT` – Chat API URL
+
+* `MISTRAL_MODEL` – Model name (default: mistral-small-2503)```bash
+
+* `MISTRAL_API_EMBEDDING` – Embedding API URLpip install -r requirements.txt
+
+* `MISTRAL_EMBEDDING_MODEL` – Embedding model (default: codestral-embed)```
+
+* `MISTRAL_TEMPERATURE` – Response creativity (default: 0.7)
+
+* `MISTRAL_MAX_TOKENS` – Max response tokens (default: 500)**What this does:** Installs all required Python packages listed in `requirements.txt`, including:
+
+* `MISTRAL_MAX_CONTEXT_TOKENS` – Max context tokens (default: 10000)- **FastAPI**: Web framework for building APIs
+
+* `MISTRAL_API_TIMEOUT` – API timeout seconds (default: 60.0)- **Uvicorn**: ASGI server for running FastAPI
+
+* `MISTRAL_EMBEDDING_TIMEOUT` – Embedding timeout (default: 120.0)- **Motor**: Async MongoDB driver
+
+* `MISTRAL_STARTUP_TIMEOUT` – Startup check timeout (default: 10.0)- **Mistralai**: Mistral AI SDK for LLM integration
+
+* `MISTRAL_STARTUP_MAX_TOKENS` – Startup test tokens (default: 10)- **Chromadb**: Vector database for embeddings
+
+* `MISTRAL_MAX_RETRIES` – Failed request retries (default: 3)- **LangChain**: Document processing and text splitting
+
+* `MISTRAL_EMBEDDING_BATCH_SIZE_SMALL` – Small batch size (default: 5)- **httpx**: HTTP client for API requests
+
+* `MISTRAL_EMBEDDING_BATCH_SIZE_LARGE` – Large batch size (default: 10)- **python-dotenv**: Environment variable management
+
+* `MISTRAL_EMBEDDING_BATCH_THRESHOLD` – Batch threshold (default: 50)- And many more dependencies...
+
+
+
+**Database:**### Step 6: Set Up MongoDB
+
+
+
+* `MONGODB_URL` – Connection string (required)Ensure MongoDB is running on your system.
+
+* `DATABASE_NAME` – Database name (required)
+
+* `DATABASE_TYPE` – Database type (default: mongodb)**On Windows:**
+
+* `DATABASE_TIMEOUT_MS` – Connection timeout (default: 5000)```powershell
+
+* `SOCKET_TIMEOUT` – Socket timeout (default: 1.0)net start MongoDB
+
+```
+
+**Weather:**
+
+**On macOS:**
+
+* `OPENWEATHER_API_KEY` – API key (required)```bash
+
+* `OPENWEATHER_API_URL` – API endpointbrew services start mongodb-community
+
+* `OPENWEATHER_API_TIMEOUT` – Timeout seconds (default: 30.0)```
+
+
+
+**RAG:****On Linux:**
+
+```bash
+
+* `RAG_MAX_CONTEXT_CHUNKS` – Max chunks to retrieve (default: 5)sudo systemctl start mongod
+
+* `RAG_MAX_CONTEXT_LENGTH` – Max context chars (default: 2000)```
+
+* `RAG_CHUNK_SIZE` – Chunk size chars (default: 500)
+
+* `RAG_CHUNK_OVERLAP` – Chunk overlap chars (default: 50)**What this does:** Starts the MongoDB service so the application can connect to the database.
+
+
+
+**Upload:**### Step 7: Configure Environment Variables
+
+
+
+* `MAX_UPLOAD_SIZE_MB` – Max file size MB (default: 10)Create a `.env` file in the `backend` directory:
+
+
+
+**Logging:****On Windows:**
+
+```powershell
+
+* `DEBUG_THIRD_PARTY` – Debug external libs (default: false)New-Item .env -ItemType File
+
+* `MINIMAL_LOGGING` – Minimal log mode (default: true)notepad .env
+
+```
+
+**Orchestrator:**
+
+**On macOS/Linux:**
+
+* `STRICT_TOOL_MATCHING` – Anti-hallucination mode (default: true)```bash
+
+touch .env
+
+**Token:**nano .env
+
+```
+
+* `CHARS_PER_TOKEN` – Chars per token estimate (default: 4)
 
 Then add your configuration (see [Environment Variables](#environment-variables) section below).
 
+---
+
 **What this does:** Creates a configuration file where you'll store all your API keys and settings. This file is not committed to Git for security.
+
+## Project Structure
 
 ### Step 8: Run the Application
 
-```bash
-python startup.py
 ```
 
-**What this does:** Starts the FastAPI backend server. The application will:
-- Load configuration from `.env` file
-- Connect to MongoDB
-- Verify Mistral AI API connectivity
-- Start the server on the configured port (default: 8011)
+backend/```bash
 
-**Access the application:**
-- **API Server**: http://127.0.0.1:8011
-- **API Documentation**: http://127.0.0.1:8011/docs
-- **Alternative Docs**: http://127.0.0.1:8011/redoc
+├── startup.pypython startup.py
 
----
+├── main.py```
 
-## Configuration
+├── prompts.txt
 
-All configuration is centralized in `core/config.py` and can be overridden using environment variables in the `.env` file.
+│**What this does:** Starts the FastAPI backend server. The application will:
+
+├── core/- Load configuration from `.env` file
+
+│   ├── orchestrator.py- Connect to MongoDB
+
+│   ├── mistral_service.py- Verify Mistral AI API connectivity
+
+│   ├── rag_service.py- Start the server on the configured port (default: 8011)
+
+│   └── bot_tools/
+
+│**Access the application:**
+
+├── database/- **API Server**: http://127.0.0.1:8011
+
+│   └── mongodb_adapter.py- **API Documentation**: http://127.0.0.1:8011/docs
+
+│- **Alternative Docs**: http://127.0.0.1:8011/redoc
+
+├── routes/
+
+│   ├── users.py---
+
+│   ├── documents.py
+
+│   └── messages.py## Configuration
+
+│
+
+└── logs/All configuration is centralized in `core/config.py` and can be overridden using environment variables in the `.env` file.
+
+```
 
 ### Configuration Files
 
-1. **`core/config.py`**: Main configuration class with all settings and defaults
-2. **`.env`**: Environment variables file (you create this)
-3. **`prompts.txt`**: All LLM prompts for tool selection and response formatting
-4. **`requirements.txt`**: Python dependencies list
-
 ---
 
-## Environment Variables
+1. **`core/config.py`**: Main configuration class with all settings and defaults
 
-Create a `.env` file in the `backend` directory with the following variables. Each variable is explained in detail below.
+## Usage2. **`.env`**: Environment variables file (you create this)
 
-### Required Variables
+3. **`prompts.txt`**: All LLM prompts for tool selection and response formatting
+
+```bash4. **`requirements.txt`**: Python dependencies list
+
+python startup.py
+
+```---
+
+
+
+**Access:**## Environment Variables
+
+
+
+* **API:** [http://127.0.0.1:8011](http://127.0.0.1:8011)Create a `.env` file in the `backend` directory with the following variables. Each variable is explained in detail below.
+
+* **Docs:** [http://127.0.0.1:8011/docs](http://127.0.0.1:8011/docs)
+
+* **ReDoc:** [http://127.0.0.1:8011/redoc](http://127.0.0.1:8011/redoc)### Required Variables
+
+* **Health:** [http://127.0.0.1:8011/health](http://127.0.0.1:8011/health)
 
 These variables **must** be set for the application to function:
 
+---
+
 ```env
-# Mistral AI API Key
+
+## API Documentation# Mistral AI API Key
+
 MISTRAL_API_KEY=your_mistral_api_key_here
-```
+
+### User Endpoints```
+
 **What it is:** Your authentication key for Mistral AI API  
-**Where to get it:** [console.mistral.ai](https://console.mistral.ai/)  
-**What it does:** Authenticates all requests to Mistral AI for chat completions and embeddings  
-**Example:** `MISTRAL_API_KEY=sk-abc123def456ghi789`
 
-```env
+* **POST** `/api/users/` – Create user**Where to get it:** [console.mistral.ai](https://console.mistral.ai/)  
+
+* **GET** `/api/users/` – Get all users**What it does:** Authenticates all requests to Mistral AI for chat completions and embeddings  
+
+* **GET** `/api/users/{id}` – Get user by ID**Example:** `MISTRAL_API_KEY=sk-abc123def456ghi789`
+
+
+
+### Document Endpoints```env
+
 # MongoDB Connection String
-MONGODB_URL=mongodb://localhost:27017
-```
-**What it is:** Database connection string  
+
+* **POST** `/api/documents/upload` – Upload fileMONGODB_URL=mongodb://localhost:27017
+
+* **GET** `/api/documents/user/{id}` – List documents```
+
+* **DELETE** `/api/documents/{id}` – Delete document**What it is:** Database connection string  
+
 **Where to get it:** 
-- Local: Use `mongodb://localhost:27017`
+
+### Chat Endpoints- Local: Use `mongodb://localhost:27017`
+
 - Atlas: Get from MongoDB Atlas dashboard  
-**What it does:** Connects the application to MongoDB for storing users, messages, and conversations  
-**Examples:**
-- Local: `mongodb://localhost:27017`
+
+* **POST** `/api/messages/` – Send message**What it does:** Connects the application to MongoDB for storing users, messages, and conversations  
+
+* **GET** `/api/messages/user/{id}` – Get messages**Examples:**
+
+* **POST** `/api/orchestrator/query` – Main chatbot endpoint- Local: `mongodb://localhost:27017`
+
 - Atlas: `mongodb+srv://username:password@cluster.mongodb.net/`
-
-```env
-# Database Name
-DATABASE_NAME=bot_database
-```
-**What it is:** Name of the MongoDB database to use  
-**What it does:** Specifies which database within MongoDB stores application data  
-**Default:** `bot_database`  
-**Example:** `DATABASE_NAME=my_chatbot_db`
-
-```env
-# OpenWeatherMap API Key
-OPENWEATHER_API_KEY=your_openweather_api_key_here
-```
-**What it is:** API key for accessing weather data  
-**Where to get it:** [openweathermap.org/api](https://openweathermap.org/api)  
-**What it does:** Enables the weather tool to fetch real-time weather information  
-**Example:** `OPENWEATHER_API_KEY=1234567890abcdef`
 
 ---
 
-### Optional Variables (Advanced Configuration)
-
-These variables have default values but can be customized:
-
-#### Server Configuration
-
 ```env
+
+## Manual Deployment# Database Name
+
+DATABASE_NAME=bot_database
+
+### Standard Server Deployment```
+
+**What it is:** Name of the MongoDB database to use  
+
+```bash**What it does:** Specifies which database within MongoDB stores application data  
+
+git clone https://github.com/Mohamadaliibrahim/fastapi_mini_project.git**Default:** `bot_database`  
+
+cd fastapi_mini_project/backend**Example:** `DATABASE_NAME=my_chatbot_db`
+
+python3 -m venv venv
+
+source venv/bin/activate```env
+
+pip install -r requirements.txt# OpenWeatherMap API Key
+
+python startup.pyOPENWEATHER_API_KEY=your_openweather_api_key_here
+
+``````
+
+**What it is:** API key for accessing weather data  
+
+### Using Docker**Where to get it:** [openweathermap.org/api](https://openweathermap.org/api)  
+
+**What it does:** Enables the weather tool to fetch real-time weather information  
+
+**Dockerfile:****Example:** `OPENWEATHER_API_KEY=1234567890abcdef`
+
+
+
+```dockerfile---
+
+FROM python:3.12-slim
+
+WORKDIR /app### Optional Variables (Advanced Configuration)
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txtThese variables have default values but can be customized:
+
+COPY . .
+
+EXPOSE 8011#### Server Configuration
+
+CMD ["python", "startup.py"]
+
+``````env
+
 HOST=127.0.0.1
-```
+
+**Build and Run:**```
+
 **What it is:** Server host address  
-**What it does:** Defines the network interface the server listens on  
-**Default:** `127.0.0.1` (localhost only)  
-**Options:**
-- `127.0.0.1`: Local access only (development)
+
+```bash**What it does:** Defines the network interface the server listens on  
+
+docker build -t chatbot-backend .**Default:** `127.0.0.1` (localhost only)  
+
+docker run -p 8011:8011 --env-file .env chatbot-backend**Options:**
+
+```- `127.0.0.1`: Local access only (development)
+
 - `0.0.0.0`: Allow external access (production)  
-**When to change:** Use `0.0.0.0` when deploying to a server accessible from other machines
 
-```env
+---**When to change:** Use `0.0.0.0` when deploying to a server accessible from other machines
+
+
+
+## Troubleshooting```env
+
 PORT=8011
-```
-**What it is:** Server port number  
-**What it does:** Defines which port the FastAPI server listens on  
-**Default:** `8011`  
-**When to change:** If port 8011 is already in use by another application  
-**Example:** `PORT=8080`
 
-```env
+* **Port in use:** Change `PORT` in `.env````
+
+* **MongoDB failed:** Restart service (`net start MongoDB`)**What it is:** Server port number  
+
+* **Missing module:** Run `pip install -r requirements.txt`**What it does:** Defines which port the FastAPI server listens on  
+
+* **Check logs:** `logs/error.txt` or `logs/debug.txt`**Default:** `8011`  
+
+**When to change:** If port 8011 is already in use by another application  
+
+---**Example:** `PORT=8080`
+
+
+
+## License```env
+
 RELOAD=true
-```
-**What it is:** Auto-reload on code changes  
+
+**MIT License**  ```
+
+Copyright (c) 2025 **Mohamad Ali Ibrahim****What it is:** Auto-reload on code changes  
+
 **What it does:** Automatically restarts the server when code files change  
 **Default:** `true`  
 **Options:** `true` (development), `false` (production)  
