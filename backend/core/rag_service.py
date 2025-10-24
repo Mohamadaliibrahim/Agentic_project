@@ -5,6 +5,7 @@ Combines document retrieval with Mistral AI for context-aware responses
 
 import logging
 from typing import List, Dict, Any
+from core.config import settings
 from core.mistral_service import mistral_service
 from core.embedding_service import embedding_service
 from database.factory import get_db
@@ -16,9 +17,9 @@ logger = logging.getLogger("rag_service")
 class RAGService:
     """Service for Retrieval-Augmented Generation using document chunks"""
     
-    def __init__(self, max_context_chunks: int = 5, max_context_length: int = 2000):
-        self.max_context_chunks = max_context_chunks
-        self.max_context_length = max_context_length
+    def __init__(self, max_context_chunks: int = None, max_context_length: int = None):
+        self.max_context_chunks = max_context_chunks or settings.RAG_MAX_CONTEXT_CHUNKS
+        self.max_context_length = max_context_length or settings.RAG_MAX_CONTEXT_LENGTH
     
     async def query_documents(
         self, 

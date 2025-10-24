@@ -12,6 +12,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Qu
 from pydantic import BaseModel
 from data_validation import DocumentQueryRequest, DocumentQueryResponse
 
+from core.config import settings
 from core.document_processor import document_processor
 from core.embedding_service import embedding_service
 from database.factory import get_db
@@ -63,12 +64,12 @@ async def upload_document(
         file_content = await file.read()
         file_size = len(file_content)
         
-        # Validate file size (max 10MB)
-        max_size = 10 * 1024 * 1024  # 10MB
+        # Validate file size
+        max_size = settings.MAX_UPLOAD_SIZE_BYTES
         if file_size > max_size:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File size too large. Maximum allowed size is 10MB."
+                detail=f"File size too large. Maximum allowed size is {settings.MAX_UPLOAD_SIZE_MB}MB."
             )
         
         # Process document using the new vector storage approach (like rag_testing notebook)

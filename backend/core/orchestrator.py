@@ -19,6 +19,9 @@ from dataclasses import dataclass
 from .bot_tools.weather_tool import WeatherTool
 from .bot_tools.rag_tool import RAGTool
 
+# Import prompt loader
+from .prompt_loader import prompt_loader
+
 # Import services
 # Import services from the same module
 try:
@@ -189,21 +192,53 @@ class ToolBasedOrchestrator:
     
     async def _identify_tool(self, user_input: str) -> Optional[str]:
         """
-        Identify which tool should handle the user input
-        Uses pattern matching for now, could be enhanced with LLM classification
+        Use LLM to intelligently identify which tool should handle the user input
+        Returns None if the question is outside the scope of available tools
         """
-        user_input_lower = user_input.lower()
+        if not mistral_service:
+            # Fallback to None if Mistral service unavailable
+            return None
         
-        # Weather detection
-        weather_keywords = ["weather", "temperature", "forecast", "rain", "sunny", "cloudy", "climate"]
-        if any(keyword in user_input_lower for keyword in weather_keywords):
-            return "weather_query"
+        # Load the tool selection prompt from prompts.txt
+        tool_selection_prompt = prompt_loader.get_prompt(
+            "main_prompt",
+            user_input=user_input
+        )
         
+        if not tool_selection_prompt:
+            self.logger.error("Failed to load main_prompt from prompts.txt")
+            return None
 
-        
-        # Default to RAG search for document-related queries
-        # This will be the most common fallback
-        return "rag_search"
+        try:
+            # Get LLM decision
+            llm_response = await mistral_service.generate_response(
+                user_message=tool_selection_prompt,
+                user_id="system_tool_selector",
+                conversation_history=[]
+            )
+            
+            # Clean up the response and extract tool name
+            tool_choice = llm_response.strip().lower()
+            
+            # Validate the response
+            if "weather_query" in tool_choice or "weather" in tool_choice:
+                self.logger.info(f"LLM selected tool: weather_query")
+                return "weather_query"
+            elif "rag_search" in tool_choice or "rag" in tool_choice:
+                self.logger.info(f"LLM selected tool: rag_search")
+                return "rag_search"
+            elif "none" in tool_choice:
+                self.logger.info(f"LLM determined no tool is applicable")
+                return None
+            else:
+                # If LLM response is unclear, default to None (safer)
+                self.logger.warning(f"LLM tool selection unclear: {llm_response}")
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error in LLM tool selection: {str(e)}")
+            # On error, return None to trigger "I don't know" response
+            return None
     
     async def _extract_tool_parameters(self, tool, user_input: str, user_id: str) -> Dict[str, Any]:
         """Extract parameters needed for the specific tool"""
@@ -240,46 +275,62 @@ class ToolBasedOrchestrator:
         return "UNKNOWN_SHIPMENT_ID"
     
     async def _handle_general_conversation(self, request: OrchestrationRequest, session_id: str) -> OrchestrationResponse:
-        """Handle general conversation when no specific tool is identified"""
+        """
+        Handle queries that don't match any available tools
+        Use LLM with conversation history for general chat, memory questions, etc.
+        """
         
-        if mistral_service:
-            conversation_prompt = f"""You are a helpful AI assistant for CMA CGM shipping and logistics. 
-
-The user said: "{request.user_input}"
-
-This doesn't seem to match any of our specific tools (weather, document search, shipment tracking), so please provide a helpful general response. 
-
-If the user is asking about:
-- Weather: Ask them to specify a location
-- Shipping/logistics: Ask for specific shipment or booking numbers
-- Document questions: Let them know they can upload documents for search
-- General questions: Answer helpfully based on your knowledge
-
-Be friendly and guide them toward using the specific tools when appropriate."""
-
+        if not mistral_service:
+            response = "I'm sorry, but I'm currently unable to process general conversations."
+            return OrchestrationResponse(
+                success=True,
+                response=response,
+                tool_used="general_chat_unavailable",
+                metadata={"type": "no_llm_service", "session_id": session_id}
+            )
+        
+        # Get conversation history from context
+        conversation_history = []
+        if request.context and "conversation_history" in request.context:
+            conversation_history = request.context["conversation_history"]
+        
+        try:
+            # Use LLM for general conversation with history
+            # The mistral service has a built-in system message that handles conversation context
             response = await mistral_service.generate_response(
-                user_message=conversation_prompt,
+                user_message=request.user_input,
                 user_id=request.user_id,
-                conversation_history=request.context.get("conversation_history", []) if request.context else []
+                conversation_history=conversation_history,
+                session_id=session_id
             )
-        else:
-            response = "I'm a CMA CGM assistant. I can help with weather queries, document searches, and shipment tracking. How can I assist you today?"
-        
-        # Log the general conversation
-        if app_logger:
-            app_logger.log_prompt(
-                session_id=session_id,
-                prompt_content=f"USER_INPUT: {request.user_input}",
-                response_content=f"GENERAL_CONVERSATION: {response}",
-                prompt_type="general_conversation"
+            
+            # Log the general conversation
+            if app_logger:
+                app_logger.log_prompt(
+                    session_id=session_id,
+                    prompt_content=f"GENERAL_CHAT: {request.user_input}",
+                    response_content=response,
+                    prompt_type="general_conversation"
+                )
+            
+            return OrchestrationResponse(
+                success=True,
+                response=response,
+                tool_used="general_chat",
+                metadata={"type": "general_conversation", "session_id": session_id}
             )
-        
-        return OrchestrationResponse(
-            success=True,
-            response=response,
-            tool_used="general_conversation",
-            metadata={"type": "fallback", "session_id": session_id}
-        )
+            
+        except Exception as e:
+            self.logger.error(f"[{session_id}] General conversation failed: {str(e)}")
+            
+            fallback_response = "I encountered an error while processing your message. Please try rephrasing your question."
+            
+            return OrchestrationResponse(
+                success=True,
+                response=fallback_response,
+                tool_used="general_chat_error",
+                metadata={"error": str(e), "session_id": session_id}
+            )
 
 # Create instance
 orchestrator = ToolBasedOrchestrator()

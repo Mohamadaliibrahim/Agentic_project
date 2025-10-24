@@ -119,11 +119,31 @@ async def orchestrated_chat_message(
         # Record timestamps
         message_sent_timestamp = datetime.utcnow()
         
+        # Get conversation history if chat_id exists
+        conversation_history = []
+        if chat_id:
+            try:
+                db = get_db()
+                messages = await db.get_messages_by_chat_id(chat_id)
+                # Format history for Mistral service (expects user_message and assistant_message keys)
+                conversation_history = [
+                    {
+                        "user_message": msg.get("user_message", ""),
+                        "assistant_message": msg.get("assistant_message", "")
+                    }
+                    for msg in messages
+                ]
+            except Exception as e:
+                logger.warning(f"Failed to fetch conversation history: {str(e)}")
+        
         # Create orchestration request using new system
         orchestration_request = OrchestrationRequest(
             user_input=request.query,
             user_id=request.user_id,
-            context={"chat_id": chat_id} if chat_id else {}
+            context={
+                "chat_id": chat_id,
+                "conversation_history": conversation_history
+            } if chat_id else {}
         )
         
         # Execute through orchestrator

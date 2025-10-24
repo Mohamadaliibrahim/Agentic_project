@@ -8,6 +8,7 @@ RAG utilities:
 from typing import List, Tuple, Callable, Dict, Any
 import numpy as np
 import uuid
+from core.config import settings
 
 from database.factory import get_db
 
@@ -174,8 +175,8 @@ def chunk_text(text: str) -> List[str]:
         raise ImportError("RecursiveCharacterTextSplitter not available. Install langchain or langchain-text-splitters")
     
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=50
+        chunk_size=settings.RAG_CHUNK_SIZE,
+        chunk_overlap=settings.RAG_CHUNK_OVERLAP
     )
     chunks = splitter.split_text(text)
     return chunks

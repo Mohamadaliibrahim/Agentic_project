@@ -6,6 +6,8 @@ Uses the existing RAG services from core
 
 from typing import Dict, Any
 from .base_tool import BaseBotTool, ToolResponse
+from ..prompt_loader import prompt_loader
+from .tool_definition.schema_loader import load_tool_parameters
 
 # Import existing RAG services from parent module
 try:
@@ -26,36 +28,19 @@ class RAGTool(BaseBotTool):
     
     @property
     def parameters_schema(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query to find relevant information in documents"
-                },
-                "user_id": {
-                    "type": "string", 
-                    "description": "The user ID to search their specific documents"
-                }
-            },
-            "required": ["query", "user_id"]
-        }
+        # Load parameters schema from the JSON tool-definition file.
+        # This will raise an exception if the JSON file is missing or malformed.
+        return load_tool_parameters("rag_tool.json")
     
     @property
     def llm_prompt_template(self) -> str:
-        return """The user asked: "{user_query}"
-
-I searched through the uploaded documents and found the following relevant information:
-
-Document Search Results:
-{tool_data}
-
-Context Information:
-- Number of relevant chunks found: {metadata[chunks_found]}
-- Documents searched: {metadata[documents_searched]}
-- Search confidence: {metadata[confidence]}
-
-Please provide a comprehensive answer based on this document information. If the information is incomplete or you need to make reasonable inferences, mention that. Be helpful and detailed in your response while staying grounded in the document content."""
+        # Load prompt from prompts.txt file
+        prompt = prompt_loader.get_prompt(
+            "tool_rag_response",
+            user_query="{user_query}",
+            rag_data="{tool_data}"
+        )
+        return prompt if prompt else "Answer based on: {tool_data}"
     
     async def execute(self, parameters: Dict[str, Any]) -> ToolResponse:
         """Execute RAG search"""

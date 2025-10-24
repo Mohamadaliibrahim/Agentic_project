@@ -14,14 +14,17 @@ class MistralAIService:
         self.api_endpoint = settings.MISTRAL_API_ENDPOINT
         self.api_key = settings.MISTRAL_API_KEY
         self.model = settings.MISTRAL_MODEL
-        self.max_context_tokens = 10
+        self.max_context_tokens = settings.MISTRAL_MAX_CONTEXT_TOKENS
+        self.temperature = settings.MISTRAL_TEMPERATURE
+        self.max_tokens = settings.MISTRAL_MAX_TOKENS
+        self.api_timeout = settings.MISTRAL_API_TIMEOUT
     
     def estimate_tokens(self, text: str) -> int:
         """
         Simple token estimation (roughly 4 characters per token for English)
         This is an approximation - actual tokenization may vary
         """
-        return len(text) // 4
+        return len(text) // settings.CHARS_PER_TOKEN
     
     def limit_conversation_history(self, conversation_history: list) -> list:
         """
@@ -106,8 +109,8 @@ class MistralAIService:
         payload = {
             "model": self.model,
             "messages": messages,
-            "max_tokens": 500,
-            "temperature": 0.7
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature
         }
         
         # Log the complete prompt for debugging
@@ -115,13 +118,13 @@ class MistralAIService:
         # We'll log the prompt after we get the response in the try block
         
         log_debug_session(session_id, "mistral_service.py", f"Payload prepared - max_tokens={payload['max_tokens']}, temperature={payload['temperature']}")
-        log_info_session(session_id, "mistral_service.py", "Using 60-second timeout for API requests")
+        log_info_session(session_id, "mistral_service.py", f"Using {self.api_timeout}-second timeout for API requests")
         
         try:
             api_start = datetime.utcnow()
             log_debug_session(session_id, "mistral_service.py", "Sending request to Mistral AI API...")
             
-            async with httpx.AsyncClient(timeout=60.0) as client:  # Increased timeout to 60 seconds
+            async with httpx.AsyncClient(timeout=self.api_timeout) as client:
                 response = await client.post(
                     self.api_endpoint,
                     headers=headers,

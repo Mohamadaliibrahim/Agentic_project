@@ -1,0 +1,21 @@
+{
+    "type": "function",
+    "function": {
+        "name": "rag_search",
+        "description": "Search uploaded documents and return a concise answer plus sources for a user's query.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search query to find relevant information in documents."
+                },
+                "user_id": {
+                    "type": "string",
+                    "description": "The user ID whose documents should be searched."
+                }
+            },
+            "required": ["query", "user_id"]
+        }
+    }
+}

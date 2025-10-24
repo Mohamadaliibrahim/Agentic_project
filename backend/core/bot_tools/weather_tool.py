@@ -7,6 +7,8 @@ import httpx
 import re
 from typing import Dict, Any
 from .base_tool import BaseBotTool, ToolResponse
+from ..prompt_loader import prompt_loader
+from .tool_definition.schema_loader import load_tool_parameters
 
 class WeatherTool(BaseBotTool):
     """Tool for getting weather information"""
@@ -21,34 +23,19 @@ class WeatherTool(BaseBotTool):
     
     @property
     def parameters_schema(self) -> Dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "location": {
-                    "type": "string",
-                    "description": "The city, country, or location to get weather for (e.g., 'New York', 'Paris, France', 'Tokyo')"
-                }
-            },
-            "required": ["location"]
-        }
+        # Load parameters schema from the JSON tool-definition file.
+        # This will raise an exception if the JSON file is missing or malformed.
+        return load_tool_parameters("weather_tool.json")
     
     @property
     def llm_prompt_template(self) -> str:
-        return """The user asked about weather: "{user_query}"
-
-I retrieved the following weather data for {metadata[location]}:
-
-Raw Weather Data:
-{tool_data}
-
-Please format this weather information in a friendly, easy-to-read way for the user. Include:
-- Current temperature (both Celsius and Fahrenheit)
-- Weather conditions
-- How it feels like
-- Humidity and wind information
-- Any other relevant details
-
-Make the response conversational and helpful. Use appropriate weather emojis to make it more engaging."""
+        # Load prompt from prompts.txt file
+        prompt = prompt_loader.get_prompt(
+            "tool_weather_response",
+            user_query="{user_query}",
+            weather_data="{tool_data}"
+        )
+        return prompt if prompt else "Format the weather data: {tool_data}"
     
     async def execute(self, parameters: Dict[str, Any]) -> ToolResponse:
         """Execute weather query"""
@@ -89,7 +76,7 @@ Make the response conversational and helpful. Use appropriate weather emojis to 
             "units": "metric"  # Celsius
         }
         
-        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+        async with httpx.AsyncClient(timeout=settings.OPENWEATHER_API_TIMEOUT, verify=False) as client:
             response = await client.get(url, params=params)
             
             if response.status_code == 200:

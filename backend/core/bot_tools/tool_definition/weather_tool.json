@@ -1,0 +1,25 @@
+{
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "Retrieve current weather (and optional forecast) for a given location.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "location": {
+                    "type": "string",
+                    "description": "City name or location query (e.g., 'London,UK' or ZIP/postal code)."
+                },
+                "units": {
+                    "type": "string",
+                    "description": "Units for temperature: 'metric' or 'imperial' (default: metric)."
+                },
+                "forecast_days": {
+                    "type": "integer",
+                    "description": "Optional number of forecast days to return (0-7)."
+                }
+            },
+            "required": ["location"]
+        }
+    }
+}

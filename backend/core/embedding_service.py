@@ -55,7 +55,7 @@ class EmbeddingService:
         }
         
         # Use smaller batches for large document sets to avoid timeouts
-        batch_size = 5 if len(texts) > 50 else 10
+        batch_size = settings.MISTRAL_EMBEDDING_BATCH_SIZE_SMALL if len(texts) > settings.MISTRAL_EMBEDDING_BATCH_THRESHOLD else settings.MISTRAL_EMBEDDING_BATCH_SIZE_LARGE
         all_embeddings = []
         
         logger.info(f"Processing {len(texts)} text chunks in batches of {batch_size}")
@@ -73,12 +73,10 @@ class EmbeddingService:
             }
             
             # Retry logic for failed requests
-            max_retries = 3
-            for attempt in range(max_retries):
+            for attempt in range(settings.MISTRAL_MAX_RETRIES):
                 try:
-                    # Longer timeout for large documents (2 minutes)
-                    timeout_duration = 120.0
-                    async with httpx.AsyncClient(timeout=timeout_duration) as client:
+                    # Longer timeout for large documents
+                    async with httpx.AsyncClient(timeout=settings.MISTRAL_EMBEDDING_TIMEOUT) as client:
                         response = await client.post(
                             self.api_endpoint,
                             headers=headers,
@@ -101,7 +99,7 @@ class EmbeddingService:
                         raise Exception("Mistral API rate limit exceeded")
                     else:
                         error_text = response.text if hasattr(response, 'text') else str(response.status_code)
-                        if attempt < max_retries - 1:
+                        if attempt < settings.MISTRAL_MAX_RETRIES - 1:
                             logger.warning(f"Batch {batch_num} failed (attempt {attempt + 1}), retrying...")
                             continue
                         else:
@@ -111,19 +109,19 @@ class EmbeddingService:
                     break
                         
                 except httpx.TimeoutException:
-                    if attempt < max_retries - 1:
+                    if attempt < settings.MISTRAL_MAX_RETRIES - 1:
                         logger.warning(f"Batch {batch_num} timed out (attempt {attempt + 1}), retrying...")
                         continue
                     else:
-                        raise Exception(f"Mistral embedding API request timed out after {max_retries} attempts")
+                        raise Exception(f"Mistral embedding API request timed out after {settings.MISTRAL_MAX_RETRIES} attempts")
                 except httpx.RequestError as e:
-                    if attempt < max_retries - 1:
+                    if attempt < settings.MISTRAL_MAX_RETRIES - 1:
                         logger.warning(f"Batch {batch_num} request failed (attempt {attempt + 1}), retrying...")
                         continue
                     else:
                         raise Exception(f"Mistral embedding API request failed: {str(e)}")
                 except json.JSONDecodeError:
-                    if attempt < max_retries - 1:
+                    if attempt < settings.MISTRAL_MAX_RETRIES - 1:
                         logger.warning(f"Batch {batch_num} returned invalid JSON (attempt {attempt + 1}), retrying...")
                         continue
                     else:

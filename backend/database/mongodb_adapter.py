@@ -81,13 +81,13 @@ class MongoDBAdapter(DatabaseInterface):
             await self.database.chat_messages.drop_index("id_1")
             print("Dropped old 'id' index")
         except Exception as e:
-            print(f"No old 'id' index to drop or error dropping it: {e}")
+            pass  # Index doesn't exist, which is fine
         
         try:
             await self.database.chat_messages.drop_index("message_id_1")
             print("Dropped old global unique 'message_id' index")
         except Exception as e:
-            print(f"No old 'message_id' index to drop or error dropping it: {e}")
+            pass  # Index doesn't exist, which is fine
         
         old_docs = await self.database.chat_messages.find({"id": {"$exists": True}, "message_id": {"$exists": False}}).to_list(None)
         

@@ -71,7 +71,7 @@ class StartupHealthChecker:
         print("\nChecking Database Connection...")
         
         try:
-            client = AsyncIOMotorClient(settings.MONGODB_URL, serverSelectionTimeoutMS=5000)
+            client = AsyncIOMotorClient(settings.MONGODB_URL, serverSelectionTimeoutMS=settings.DATABASE_TIMEOUT_MS)
             
             await client.admin.command('ping')
             
@@ -93,7 +93,7 @@ class StartupHealthChecker:
         except Exception as e:
             self.log_warning("Database", f"Cannot connect to MongoDB: {str(e)}")
             self.log_warning("Database", "MongoDB is not running - server will start but database features won't work")
-            return False  # Make database connection non-blocking for development
+            return False
     
     async def check_mistral_ai_service(self) -> bool:
         """Check Mistral AI service connectivity and authentication"""
@@ -116,10 +116,10 @@ class StartupHealthChecker:
             payload = {
                 "model": settings.MISTRAL_MODEL,
                 "messages": [{"role": "user", "content": "test"}],
-                "max_tokens": 10
+                "max_tokens": settings.MISTRAL_STARTUP_MAX_TOKENS
             }
             
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=settings.MISTRAL_STARTUP_TIMEOUT) as client:
                 response = await client.post(
                     settings.MISTRAL_API_ENDPOINT,
                     headers=headers,
@@ -160,7 +160,7 @@ class StartupHealthChecker:
         try:
             import socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(1)
+            sock.settimeout(settings.SOCKET_TIMEOUT)
             result = sock.connect_ex((settings.HOST, settings.PORT))
             sock.close()
             
