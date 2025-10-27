@@ -53,7 +53,7 @@ MONGODB_URL=mongodb://localhost:27017
 Run the backend:
 
 ```powershell
-python startup.py
+python main.py
 ```
 
 Visit [http://127.0.0.1:8011/docs](http://127.0.0.1:8011/docs) for interactive API documentation.
