@@ -160,20 +160,3 @@ backend/
 └── vector_storage/        # FAISS vector indexes
 ```
 
-## Troubleshooting
-
-**Module not found:** `pip install -r requirements.txt`
-
-**MongoDB connection failed:** Ensure MongoDB is running (see Quick Setup)
-
-**Port in use:** Change `PORT` in `.env` file
-
-**Mistral API errors:** Verify `MISTRAL_API_KEY` in `.env` (get key at https://console.mistral.ai/)
-
-**Check logs:** See `logs/error.txt` for detailed error information
-
-## Support
-
-Issues: https://github.com/Mohamadaliibrahim/fastapi_mini_project/issues
-
-License: MIT — Copyright (c) 2025 Mohamad Ali Ibrahim
