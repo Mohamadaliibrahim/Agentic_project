@@ -29,9 +29,6 @@ net start MongoDB
 ```
 
 You can also download MongoDB manually from the following link:
-➡️ **Direct download:** [MongoDB Windows Installer (v8.2.1)](https://fastdl.mongodb.org/windows/mongodb-windows-x86_64-8.2.1-signed.msi)
-
-If it didn’t work, go to the official MongoDB website and download it here:
 🌐 **Official site:** [https://www.mongodb.com/try/download/community](https://www.mongodb.com/try/download/community)
 
 After downloading:
