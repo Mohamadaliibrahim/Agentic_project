@@ -10,7 +10,7 @@ Simple web UI that connects to the FastAPI backend to provide document upload, R
 
 Clone and install (Windows PowerShell):
 ```powershell
-git clone https://github.com/Mohamadaliibrahim/fastapi_mini_project.git
+git clone <<git_path>>frontend/fastapi_mini_project.git
 cd fastapi_mini_project\frontend
 python -m venv .venv
 .venv\Scripts\Activate.ps1
