@@ -246,7 +246,7 @@ async def orchestrated_chat_message(
             )
         ]
         
-        return ChatMessagesResponse(messages=messages)
+        return ChatMessagesResponse(messages=messages, chat_id=chat_id)
         
     except Exception as e:
         logger.error(f"Orchestrated chat message failed: {str(e)}")

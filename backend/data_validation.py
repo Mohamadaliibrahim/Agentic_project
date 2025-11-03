@@ -83,6 +83,7 @@ class ChatMessageItem(BaseModel):
 class ChatMessagesResponse(BaseModel):
     """Model for chat messages response in new format"""
     messages: list[ChatMessageItem]
+    chat_id: Optional[str] = None
 
 class ChatCollectionItem(BaseModel):
     """Model for individual chat in collection"""
