@@ -1,4 +1,4 @@
-﻿# Backend — FastAPI RAG Chatbot
+# Backend — FastAPI RAG Chatbot
 
 FastAPI backend for intelligent document search (RAG), LLM chat with Mistral AI, weather queries, and MongoDB persistence.
 
