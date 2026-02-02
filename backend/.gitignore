@@ -1,0 +1,8 @@
+# Ignore logs and vector storage folders
+logs/
+vector_storage/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

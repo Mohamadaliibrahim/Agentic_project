@@ -1,0 +1,22 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+motor==3.7.1
+pymongo==4.13.2
+python-dotenv==1.1.1
+python-multipart==0.0.20
+pydantic==2.11.7
+httpx==0.27.0
+
+# Document processing
+PyPDF2==3.0.1
+pandas==2.2.2
+python-docx==1.1.2
+numpy==1.26.4
+
+# Text processing and embeddings
+tiktoken==0.7.0
+langchain-text-splitters==0.3.0
+
+# Vector storage and AI
+faiss-cpu==1.8.0
+mistralai==1.2.4
