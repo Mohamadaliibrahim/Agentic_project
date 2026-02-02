@@ -1,78 +1,123 @@
-﻿﻿﻿# Frontend — Streamlit Chat UI
+﻿﻿Perfect 👍
+Here is the **cleaned and adapted version** of your **Frontend README section**, rewritten so it fits **inside the original main README**, with **all git / clone / cd references removed**.
 
-Streamlit web interface for the AI chatbot backend. Upload documents, chat with AI, and view conversation history.
+You can paste this **directly under a “Frontend — Streamlit Chat UI” section** in your main `README.md`.
 
-## What This Does
+---
 
-Simple web UI that connects to the FastAPI backend to provide document upload, RAG-powered chat, and conversation management. Built with Streamlit for easy deployment.
+## Frontend — Streamlit Chat UI
 
-## Quick Setup
+Streamlit web interface for the AI chatbot backend.
+Allows users to upload documents, chat with the AI, and view conversation history through a simple web UI.
 
-Clone and install (Windows PowerShell):
+---
+
+### What This Does
+
+* Connects to the FastAPI backend
+* Provides a chat interface for LLM interaction
+* Supports document upload for RAG-powered responses
+* Displays conversation history per user
+
+Built with **Streamlit** for fast setup and easy deployment.
+
+---
+
+### Frontend Setup
+
+Create a virtual environment and install dependencies:
+
 ```powershell
-git clone <<git_path>>
-cd <<The cloned file>>
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-**Important:** Start the backend first (see backend README), then run:
+> **Important:** Make sure the backend is already running.
+
+Start the Streamlit app:
+
 ```powershell
 python main.py
 ```
 
-Visit http://localhost:8501 in your browser.
+Open in your browser:
 
-## Configuration Reference
+```
+http://localhost:8501
+```
 
-All settings in `config.py` (customize via code or environment variables):
+---
 
-**API Settings**
-- `API_BASE_URL` — Backend API URL (default: http://127.0.0.1:8011)
+### Configuration Reference
 
-**Page Settings**
-- `PAGE_TITLE` — Browser tab title (default: 🤖 AI Document Chat Assistant)
-- `PAGE_ICON` — Browser tab icon (default: 🤖)
-- `LAYOUT` — Streamlit layout mode: centered or wide (default: wide)
+All frontend settings are defined in `config.py`.
 
-**UI Settings**
-- `MAX_MESSAGE_LENGTH` — Maximum characters per message (default: 1000)
-- `MAX_FILE_SIZE_MB` — Maximum upload size in MB (default: 10)
-- `SUPPORTED_FILE_TYPES` — Allowed file types for upload (default: pdf, txt, csv, docx)
+#### API Settings
 
-**Styling**
-- `PRIMARY_COLOR` — Main theme color hex code (default: #667eea)
-- `SECONDARY_COLOR` — Secondary theme color hex code (default: #764ba2)
-- `BACKGROUND_COLOR` — Background color hex code (default: #fafafa)
+* `API_BASE_URL` — Backend API URL
+  *(default: [http://127.0.0.1:8011](http://127.0.0.1:8011))*
 
-**Chat Settings**
-- `MAX_MESSAGES_DISPLAY` — Maximum messages shown in history (default: 50)
-- `MESSAGE_REFRESH_INTERVAL` — Auto-refresh interval in seconds (default: 1)
+#### Page Settings
 
-## How to Use
+* `PAGE_TITLE` — Browser tab title
+  *(default: 🤖 AI Document Chat Assistant)*
+* `PAGE_ICON` — Browser tab icon
+  *(default: 🤖)*
+* `LAYOUT` — Streamlit layout mode (`centered` or `wide`)
+  *(default: wide)*
 
-1. **Create/Select User** — Use sidebar to create or select a user
-2. **Upload Documents** (Optional) — Upload PDF/TXT/DOCX files for RAG search
-3. **Chat** — Type your message and press Enter
-4. **View History** — Click "Show Conversation History" to see past messages
+#### UI Settings
 
-## Features
+* `MAX_MESSAGE_LENGTH` — Maximum characters per message
+  *(default: 1000)*
+* `MAX_FILE_SIZE_MB` — Maximum upload size
+  *(default: 10 MB)*
+* `SUPPORTED_FILE_TYPES` — Allowed upload formats
+  *(pdf, txt, csv, docx)*
 
-- ✅ User management (create/switch users)
-- ✅ Document upload (PDF, TXT, DOCX, CSV)
-- ✅ Real-time AI chat responses
-- ✅ Conversation history viewer
-- ✅ RAG-powered document search
-- ✅ Clean, responsive interface
+#### Styling
 
-## Project Structure
+* `PRIMARY_COLOR` — Main theme color
+* `SECONDARY_COLOR` — Accent color
+* `BACKGROUND_COLOR` — Page background color
+
+#### Chat Settings
+
+* `MAX_MESSAGES_DISPLAY` — Max messages shown in history
+  *(default: 50)*
+* `MESSAGE_REFRESH_INTERVAL` — Auto-refresh interval (seconds)
+  *(default: 1)*
+
+---
+
+### How to Use
+
+1. Create or select a user from the sidebar
+2. Upload documents (optional, for RAG search)
+3. Type your message and press Enter
+4. View previous conversation history when needed
+
+---
+
+### Features
+
+* ✅ User creation & switching
+* ✅ Document upload (PDF, TXT, DOCX, CSV)
+* ✅ Real-time AI responses
+* ✅ Conversation history viewer
+* ✅ RAG-powered document search
+* ✅ Clean and responsive UI
+
+---
+
+### Frontend Structure
 
 ```
 frontend/
 ├── main.py          # Streamlit app entry point
-├── config.py        # Configuration settings
+├── config.py        # UI & API configuration
 ├── api_client.py    # Backend API client
-├── utils.py         # Utility functions
+├── utils.py         # Helper utilities
 └── requirements.txt # Python dependencies
 ```
